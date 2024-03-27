@@ -1,16 +1,17 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <stdioh>
-#include <string.h>
-#include <time.h>
 #include <netinet/in.h>
-#include <netinet/ip.h>
+#include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <time.h> // Se agrega la inclusión de la biblioteca time.h
 
+#define MAX_MSG_SIZE 100
 
-void main(void){
-    char cadena[100];
+int main(void) { // Se cambia 'void' por 'int'
+    char cadena[MAX_MSG_SIZE];
     int listen_fd, comm_fd;
     struct sockaddr_in servaddr;
     FILE *myf = fopen("conversacionServidor.txt", "a");
@@ -18,13 +19,12 @@ void main(void){
     struct tm *tm;
     char hora[100];
     char *tmp;
-    char sendline[100] = "Hola, soy el servidor\n";
+    char sendline[MAX_MSG_SIZE] = "Hola, soy el servidor\n";
 
     listen_fd = socket(AF_INET, SOCK_STREAM, 0); //crea el socket
     bzero(&servaddr, sizeof(servaddr)); //inicializa la estructura servaddr a 0
 
     servaddr.sin_family = AF_INET; //asigna la familia de direcciones
-
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY); //asigna la direccion IP
     servaddr.sin_port = htons(22000); //asigna el puerto
 
@@ -35,26 +35,28 @@ void main(void){
     printf("\n\n\t\t--------Se inicio el chat--------\n\n");
     fputs("\n\n\t\t--------Se inicio el chat--------\n\n", myf);
 
-    while(!strstr(cadena, "adios") && !strstr(sendline, "adios")){
-        bzero(cadena, 100);
+    while(!strstr(cadena, "adios") && !strstr(sendline, "adios")) {
+        bzero(cadena, MAX_MSG_SIZE);
         t = time(NULL);
         tm = localtime(&t);
         strftime(hora, 100, "\n otro usuario (%H :%M) -> ", tm);
 
-        read(comm_fd, cadena, 100);
-        tmp = strcat(hora, cadena);
+        read(comm_fd, cadena, MAX_MSG_SIZE);
+        tmp = strncpy(hora, cadena, 100); // Usar strncpy para copiar la cadena
         printf("%s", tmp);
-        fputs(tmp,myf);
-        if (!strstr(cadena, "adios")){
+        fputs(tmp, myf);
+
+        if (!strstr(cadena, "adios")) {
             strftime(hora, 100, "yo %H :%M -> ", tm);
             printf("%s", hora);
-            gets(sendline);
+            fgets(sendline, MAX_MSG_SIZE, stdin);
             tmp = strcat(hora, sendline);
-            write(comm_fd, sendline, strlen(sendline)+1);
-            fputs(tmp,myf);
+            write(comm_fd, sendline, strlen(sendline) + 1);
+            fputs(tmp, myf);
         }
     }
     printf("\n\n Conversacion finalizada");
     fputs("\n Se genero el archivo -> conversacionServidor.txt", myf);
     fclose(myf);
+    return 0; // Se agrega el valor de retorno
 }
