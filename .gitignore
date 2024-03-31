@@ -1,11 +1,13 @@
 # JetBrains
-idea/*
+.idea/*
+CMakeLists.txt
+cmake-build-debug/*
 
 # VScode
 .vscode
 
 # compiled files
-.out
+*.out
 
 # macOS
 .DS_Store

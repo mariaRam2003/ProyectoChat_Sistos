@@ -1,4 +1,4 @@
-# ProyectoChat_Sistos
+# Sistemas Operativos: Proyecto 1 Chat
 Proyecto 1 Chat en linea para el curso Sistemas Operativos
 
 
@@ -24,4 +24,16 @@ docker run -d -p 22000:22000 -v .:/home/project --name proyecto-container proyec
 4. Ahora finalmente podemos accesar a nuestro contenedor via el siguiente comando:
 ```bash
 docker exec -it proyecto-container /bin/bash
+```
+
+
+## Compilación del código
+Para compilar nuestro códogo primero debemos asegurarnos de tener la version transpilada de los 
+archivos `.proto` a una version en C, para eso debemos usar el siguiente comando:
+```bash
+protoc --c_out=/home/project/ --proto_path=/home/project/ chat_protocol.proto
+```
+Una vez tengamos los archivos transpilados, compilamos el código de la siguiente forma
+```bash
+gcc <c_file_name> -o <output_name> chat_protocol.pb-c.c -lprotobuf-c
 ```
