@@ -35,5 +35,5 @@ protoc --c_out=/home/project/ --proto_path=/home/project/ chat_protocol.proto
 ```
 Una vez tengamos los archivos transpilados, compilamos el código de la siguiente forma
 ```bash
-gcc <c_file_name> -o <output_name> chat_protocol.pb-c.c -lprotobuf-c
+gcc <c_file_name> -o <output_name> proto/chat_protocol.pb-c.c -lprotobuf-c
 ```
