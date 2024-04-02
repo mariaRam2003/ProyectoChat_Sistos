@@ -71,8 +71,9 @@ void change_status(char* username, char* status, int client_fd){
     pthread_mutex_unlock(&socket_mutex);
 }
 
+
 void send_message(char* recipient_, char* message_, char* sender_){
-     int recipient_socket = -1;
+    int recipient_socket = -1;
     // We look for the recipient's socket fd
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (strcmp(client_user_list[i], recipient_) == 0) { // Compare strings for equality
@@ -115,6 +116,18 @@ void send_message(char* recipient_, char* message_, char* sender_){
     }
     pthread_mutex_unlock(&socket_mutex);
 
+}
+
+void send_everyone(char* message_, char* sender_){
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        char* user = client_user_list[i];
+
+        if (user == NULL){
+            continue;
+        }else{
+            send_message(user, message_, sender_);
+        }
+    }
 }
 
 /**
@@ -303,13 +316,19 @@ void *handle_client(void *cli_sock_fd) {
                 pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion 4\n");
                 pthread_mutex_unlock(&stdout_mutex);
+                const char everyone[] = "everyone";
 
                 Chat__MessageCommunication *msgCom = cli_petition->messagecommunication;
                 char *message = msgCom->message;
                 char *recipient = msgCom->recipient;
                 char *sender = msgCom->sender;
 
-                send_message(recipient, message, sender);
+                if (strcmp(everyone, recipient) == 0){
+                    send_everyone(message, sender);
+                } else{
+                    send_message(recipient, message, sender);
+                }
+
                 break;
             }
 
