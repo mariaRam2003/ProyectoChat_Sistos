@@ -75,12 +75,12 @@ void send_direct_message(int sockfd, const char *recipient, const char *message,
     // Crear un mensaje de comunicación directa
     Chat__MessageCommunication communication_direct = CHAT__MESSAGE_COMMUNICATION__INIT;
     communication_direct.message = (char *)message;
-    communication_direct.recipient = (char *)recipient;
+    communication_direct.recipient = (char *)recipient; // Asignar el destinatario correctamente
     communication_direct.sender = (char *)sender;
 
     // Crear una petición del cliente para enviar un mensaje directo
     Chat__ClientPetition petition_direct = CHAT__CLIENT_PETITION__INIT;
-    petition_direct.option = 4; // Opción para enviar un mensaje directo
+    petition_direct.option = 2; // Opción para enviar un mensaje directo
     petition_direct.messagecommunication = &communication_direct;
 
     // Enviar la petición del cliente al servidor para enviar un mensaje directo
@@ -89,6 +89,7 @@ void send_direct_message(int sockfd, const char *recipient, const char *message,
     // Recibir mensajes directos pendientes
     receive_direct_message(sockfd);
 }
+
 
 void send_exit_request(int sockfd) {
     // Crear una petición del cliente para salir
