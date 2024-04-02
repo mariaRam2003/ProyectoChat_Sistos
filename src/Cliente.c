@@ -87,53 +87,6 @@ void send_client_petition(int sockfd, const Chat__ClientPetition *petition) {
     free(message_buffer);
 }
 
-void receive_broadcast_message(int sockfd) {
-    // Recibir el mensaje de broadcasting del servidor
-    uint8_t buffer[MAX_MESSAGE_LEN];
-    ssize_t bytes_received = recv(sockfd, buffer, MAX_MESSAGE_LEN, 0);
-    if (bytes_received <= 0) {
-        perror("Error al recibir mensaje de broadcasting del servidor");
-        exit(EXIT_FAILURE);
-    }
-
-    // Deserializar el mensaje de broadcasting
-    Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
-    if (response == NULL) {
-        perror("Error al deserializar mensaje de broadcasting del servidor");
-        exit(EXIT_FAILURE);
-    }
-
-    // Verificar si el mensaje es una respuesta exitosa
-    if (response->code == 200 && response->option == 4 && response->messagecommunication != NULL) {
-        // Imprimir el mensaje de broadcasting recibido
-        printf("Mensaje de %s: %s\n", response->messagecommunication->sender, response->messagecommunication->message);
-    } else {
-        // Imprimir el mensaje de error del servidor
-        fprintf(stderr, "Error del servidor: %s\n", response->servermessage);
-    }
-
-    // Liberar la memoria de la respuesta del servidor
-    chat__server_response__free_unpacked(response, NULL);
-}
-
-
-// Función para enviar un mensaje de broadcasting al servidor
-void send_broadcast_message(int sockfd, const char *message, const char *sender) {
-    // Crear un mensaje de comunicación para broadcasting
-    Chat__MessageCommunication communication_broadcast = CHAT__MESSAGE_COMMUNICATION__INIT;
-    communication_broadcast.message = (char *)message;
-    communication_broadcast.recipient = "everyone"; // Destinatario para broadcasting
-    communication_broadcast.sender = (char *)sender;
-
-    // Crear una petición del cliente para enviar un mensaje de broadcasting
-    Chat__ClientPetition petition_broadcast = CHAT__CLIENT_PETITION__INIT;
-    petition_broadcast.option = 4; // Opción para enviar un mensaje de broadcasting
-    petition_broadcast.messagecommunication = &communication_broadcast;
-
-    // Enviar la petición del cliente al servidor para enviar un mensaje de broadcasting
-    send_client_petition(sockfd, &petition_broadcast);
-}
-
 void receive_direct_message(int sockfd) {
     // Recibir el mensaje de comunicación del servidor
     uint8_t buffer[MAX_MESSAGE_LEN];
@@ -179,7 +132,6 @@ void send_direct_message(int sockfd, const char *recipient, const char *message,
     // Enviar la petición del cliente al servidor para enviar un mensaje directo
     send_client_petition(sockfd, &petition_direct);
 }
-
 
 void send_exit_request(int sockfd) {
     // Crear una petición del cliente para salir
@@ -324,17 +276,24 @@ int main(int argc, char *argv[]) {
 
         switch (option) {
             case 1:
-                printf("username: %s\n", client.username);
-                printf("Chatear con todos los usuarios (broadcasting)\n");
+                printf("Chatear con todos los usuarios\n");
                 // Solicitar al usuario que ingrese el mensaje a enviar
                 printf("Ingrese el mensaje a enviar a todos los usuarios: ");
                 fgets(input, sizeof(input), stdin);
+                input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del mensaje
 
-                // Enviar el mensaje de broadcasting al servidor
-                send_broadcast_message(sockfd, input, client.username);
+                // Crear un mensaje de comunicación
+                Chat__MessageCommunication communication_broadcast = CHAT__MESSAGE_COMMUNICATION__INIT;
+                communication_broadcast.message = input;
+                communication_broadcast.sender = client.username;
 
-                // Recibir el mensaje de broadcasting del servidor
-                receive_broadcast_message(sockfd);
+                // Crear una petición del cliente para enviar un mensaje a todos los usuarios
+                Chat__ClientPetition petition_broadcast = CHAT__CLIENT_PETITION__INIT;
+                petition_broadcast.option = 4; // Opción para enviar un mensaje de broadcasting
+                petition_broadcast.messagecommunication = &communication_broadcast;
+
+                // Enviar la petición del cliente al servidor para enviar un mensaje a todos los usuarios
+                send_client_petition(sockfd, &petition_broadcast);
                 break;
 
             case 2:
@@ -342,11 +301,13 @@ int main(int argc, char *argv[]) {
                 // Solicitar al usuario que ingrese el nombre del destinatario y el mensaje a enviar
                 printf("Ingrese el nombre del destinatario: ");
                 fgets(input, sizeof(input), stdin);
+                input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del nombre
                 char recipient[50];
                 strcpy(recipient, input);
 
                 printf("Ingrese el mensaje a enviar a %s: ", recipient);
                 fgets(input, sizeof(input), stdin);
+                input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del mensaje
 
                 // Enviar el mensaje directo al servidor
                 send_direct_message(sockfd, recipient, input, client.username);
@@ -360,6 +321,7 @@ int main(int argc, char *argv[]) {
                 printf("Cambiar de status\n");
                 printf("Seleccione su nuevo estado (ACTIVO, OCUPADO, INACTIVO): ");
                 fgets(input, sizeof(input), stdin);
+                input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del estado
                 send_status_change_request(sockfd, input, &client);
                 receive_server_response(sockfd, &client);
                 break;
