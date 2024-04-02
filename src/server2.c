@@ -30,6 +30,82 @@ struct ServerInfo {
     struct sockaddr_in server_addr;
 };
 
+void get_all_users_info(int sock_fd){
+    Chat__UserInfo *info_users[MAX_CLIENTS];
+
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (client_user_list[i] != NULL){
+            char* user = client_user_list[i];
+            char* status = client_status[i];
+            char* ip = client_ips[i];
+
+            Chat__UserInfo info = CHAT__USER_INFO__INIT;
+            info.username = user;
+            info.status = status;
+            info.ip = ip;
+
+            info_users[i] = &info;
+        }
+    }
+    Chat__ConnectedUsersResponse conn_response = CHAT__CONNECTED_USERS_RESPONSE__INIT;
+    conn_response.connectedusers = info_users;
+
+    Chat__ServerResponse srvr_res = CHAT__SERVER_RESPONSE__INIT;
+    srvr_res.option = 1;
+    srvr_res.code = 200;
+    srvr_res.servermessage = "success";
+    srvr_res.connectedusers = &conn_response;
+
+    size_t len = chat__server_response__get_packed_size(&srvr_res);
+    void *buffer = malloc(len);
+
+    if (send(sock_fd, buffer, len, 0)){
+        printf("Error al enviar al cliente \n");
+    }
+
+    free(buffer);
+}
+
+void get_user_info(char* username, int sock_fd){
+    int user_index = -1;
+
+    for (int i = 0 ; i < MAX_CLIENTS; i++){
+        if (strcmp(client_user_list[i], username) == 0){
+            user_index = i;
+        }
+    }
+
+    if (user_index < 0){
+        printf("No se encontro indormacion del usuario\n");
+        return;
+    }
+
+    char* user = username;
+    char* status = client_status[user_index];
+    char* ip = client_ips[user_index];
+
+    Chat__UserInfo info = CHAT__USER_INFO__INIT;
+    info.username = user;
+    info.status = status;
+    info.ip = ip;
+
+    Chat__ServerResponse srv_response = CHAT__SERVER_RESPONSE__INIT;
+    srv_response.option = 2;
+    srv_response.code = 200;
+    srv_response.servermessage = "success";
+    srv_response.userinforesponse = &info;
+
+    size_t len = chat__server_response__get_packed_size(&srv_response);
+    void* buffer = malloc(len);
+
+    if (send(sock_fd, buffer, len, 0) < 0){
+        printf("Error at sending message to server \n");
+    }
+
+    free(buffer);
+
+}
+
 void change_status(char* username, char* status, int client_fd){
     int user_index = -1;
     pthread_mutex_lock(&glob_var_mutex);
@@ -69,6 +145,7 @@ void change_status(char* username, char* status, int client_fd){
         printf("Error sending message to recipient\n");
     }
     pthread_mutex_unlock(&socket_mutex);
+    free(buffer);
 }
 
 
@@ -116,6 +193,7 @@ void send_message(char* recipient_, char* message_, char* sender_){
     }
     pthread_mutex_unlock(&socket_mutex);
 
+    free(buffer);
 }
 
 void send_everyone(char* message_, char* sender_){
@@ -257,7 +335,7 @@ void *handle_client(void *cli_sock_fd) {
         // reading bytes from client socket
         int bytes_received = recv(client_fd, buffer, BUFF_SIZE, 0);
         if(bytes_received < 0){
-            printf("socket disconnected \n");
+            printf("socket disconnected \n"); // TODO:
             continue;
         }else if (bytes_received == 0) {
             // Client has closed the connection
@@ -322,6 +400,7 @@ void *handle_client(void *cli_sock_fd) {
                 char *message = msgCom->message;
                 char *recipient = msgCom->recipient;
                 char *sender = msgCom->sender;
+                printf("sender: %s\n", sender);
 
                 if (strcmp(everyone, recipient) == 0){
                     send_everyone(message, sender);
