@@ -284,16 +284,6 @@ void *handle_client(void *cli_sock_fd) {
             }
 
             case 2: {
-                pthread_mutex_lock(&stdout_mutex);
-                printf("Opcion 2 \n");
-                pthread_mutex_unlock(&stdout_mutex);
-
-                Chat__MessageCommunication *msgCom = cli_petition->messagecommunication;
-                char *message = msgCom->message;
-                char *recipient = msgCom->recipient;
-                char *sender = msgCom->sender;
-
-                send_message(recipient, message, sender);
                 break;
             }
             case 3: {
@@ -313,6 +303,13 @@ void *handle_client(void *cli_sock_fd) {
                 pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion 4\n");
                 pthread_mutex_unlock(&stdout_mutex);
+
+                Chat__MessageCommunication *msgCom = cli_petition->messagecommunication;
+                char *message = msgCom->message;
+                char *recipient = msgCom->recipient;
+                char *sender = msgCom->sender;
+
+                send_message(recipient, message, sender);
                 break;
             }
 
