@@ -14,7 +14,12 @@
 #define MAX_CLIENTS 10
 #define BUFF_SIZE 5000
 int client_count = 0;
+char* client_user_list[MAX_CLIENTS];
+char* client_ips[MAX_CLIENTS];
+int client_fds[MAX_CLIENTS];
+int free_spaces[MAX_CLIENTS] = {0};
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * @brief This struct holds the server information
@@ -23,6 +28,80 @@ struct ServerInfo {
     int socket_fd;
     struct sockaddr_in server_addr;
 };
+
+void send_message(){
+
+}
+
+void user_registration(char* user, char* ip, int client_fd){
+    if (client_count >= MAX_CLIENTS){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Connection rejected, too many connections at the time..\n");
+        pthread_mutex_unlock(&stdout_mutex);
+        return;
+    }
+
+    int index = -1;
+    // registramos la data del usuario
+    pthread_mutex_lock(&glob_var_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (free_spaces[i] == 0){
+            free_spaces[i] = 1;
+            client_user_list[i] = user;
+            client_fds[i] = client_fd;
+            client_ips[i] = ip;
+            index = i;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&glob_var_mutex);
+
+    // response initialization
+    Chat__ServerResponse srvr_response = CHAT__SERVER_RESPONSE__INIT;
+
+    if (index < 0){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Error at registering user...\n");
+        pthread_mutex_unlock(&stdout_mutex);
+
+        // respuesta del server
+        srvr_response.option = 1;
+        srvr_response.code = 400;
+        srvr_response.servermessage = "Ocurrio un error al registrar el usuario\n";
+    }else{
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Registration of user %s succesful\n", client_user_list[index]);
+        pthread_mutex_unlock(&stdout_mutex);
+
+        // respuesta del server
+        srvr_response.option = 1;
+        srvr_response.code = 200;
+        srvr_response.servermessage = "Registrado con exito\n";
+    }
+
+    size_t len = chat__server_response__get_packed_size(&srvr_response);
+    void *buffer = malloc(len);
+    if (buffer == NULL){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Error assigning buffer \n");
+        pthread_mutex_unlock(&stdout_mutex);
+
+        chat__server_response__free_unpacked(&srvr_response, NULL);
+        return;
+    }
+
+    // Serializamos la respuesta
+    chat__server_response__pack(&srvr_response, buffer);
+
+    // enviamos la respuesta de regreso al cliente
+    if (send(client_fd, buffer, len, 0) < 0){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Error at sending response \n");
+        pthread_mutex_unlock(&stdout_mutex);
+    }
+
+    free(buffer);
+}
 
 /**
  * @brief This functions initializes the server
@@ -58,6 +137,11 @@ struct ServerInfo init_server(char* port){
     return info;
 }
 
+/**
+ * This function reads the data from the client's socket and handles the request
+ * @param cli_sock_fd socket's file descriptor
+ * @return NULL
+ */
 void *handle_client(void *cli_sock_fd) {
     // param casting
     int client_fd = *((int*) cli_sock_fd);
@@ -73,39 +157,57 @@ void *handle_client(void *cli_sock_fd) {
             perror("recv");
         } else if (bytes_received == 0) {
             // Client has closed the connection
+            pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
+            pthread_mutex_unlock(&stdout_mutex);
             break;
         }else{
+            pthread_mutex_lock(&stdout_mutex);
             printf("Received %d bytes of data: %d\n", bytes_received, *((int *) buffer));
+            pthread_mutex_unlock(&stdout_mutex);
         }
 
         // getting pointer of proto
         Chat__ClientPetition *cli_petition = chat__client_petition__unpack(NULL, bytes_received, buffer);
         free(buffer);  // Free allocated buffer after unpacking
         if (cli_petition == NULL) {
+            pthread_mutex_lock(&stdout_mutex);
             fprintf(stderr, "Error unpacking message\n");
+            pthread_mutex_unlock(&stdout_mutex);
             exit(EXIT_FAILURE);
         }
 
         int option = cli_petition->option;
-        // void *datito = cli_petition->registration;
-
-        pthread_mutex_lock(&stdout_mutex);
-        printf("option %d\n", option);
-        // printf("pointer misterioso %p \n", datito);
-        pthread_mutex_unlock(&stdout_mutex);
-
-        // Clean up
-        chat__client_petition__free_unpacked(cli_petition, NULL);
-
 
         switch(option){
-            case 7:
-                condition = 0;
+            case 1:
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion 1 \n");
+                pthread_mutex_unlock(&stdout_mutex);
+
+                Chat__UserRegistration *registration = cli_petition->registration;
+                char *username = registration->username;
+                char *ip = registration->ip;
+                user_registration(username, ip, client_fd);
                 break;
 
-            case 1:
-                printf("Look its raining!");
+            case 2:
+                break;
+
+            case 3:
+                break;
+
+            case 4:
+                break;
+
+            case 5:
+                break;
+
+            case 6:
+                break;
+
+            case 7:
+                condition = 0;
                 break;
 
             default:
@@ -114,6 +216,9 @@ void *handle_client(void *cli_sock_fd) {
                 pthread_mutex_unlock(&stdout_mutex);
                 break;
         }
+
+        // Clean up
+        chat__client_petition__free_unpacked(cli_petition, NULL);
 
     }
 
