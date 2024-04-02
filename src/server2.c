@@ -13,6 +13,7 @@
 #define MAX_CLIENTS 10
 #define BUFF_SIZE 5000
 int client_count = 0;
+pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * @brief This struct holds the server information
@@ -80,7 +81,10 @@ void *handle_client(void *cli_sock_fd) {
     }
 
     int option = cli_petition->option;
+
+    pthread_mutex_lock(&stdout_mutex);
     printf("option %d", option);
+    pthread_mutex_unlock(&stdout_mutex);
 
     // Clean up
     chat__client_petition__free_unpacked(cli_petition, NULL);
@@ -88,7 +92,7 @@ void *handle_client(void *cli_sock_fd) {
     // close socket
     close(client_fd);
 
-    return NULL;  // Return value as required by pthread_create()
+    pthread_exit(NULL);
 }
 
 
@@ -122,5 +126,4 @@ int main(int argc, char *argv[]){
 
         client_count++;
     }
-
 }
