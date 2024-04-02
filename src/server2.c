@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
 
@@ -60,34 +61,61 @@ struct ServerInfo init_server(char* port){
 void *handle_client(void *cli_sock_fd) {
     // param casting
     int client_fd = *((int*) cli_sock_fd);
+    int condition = 1;
 
-    // allocating buffer memory
-    void* buffer = malloc(BUFF_SIZE);
+    while(condition) {
+        // allocating buffer memory
+        void *buffer = malloc(BUFF_SIZE);
 
-    // reading bytes from client socket
-    int bytes_received = recv(client_fd, buffer, BUFF_SIZE, 0);
-    if (bytes_received == -1) {
-        perror("recv");
-    } else {
-        printf("Received %d bytes of data: %d\n", bytes_received, *((int*) buffer));
+        // reading bytes from client socket
+        int bytes_received = recv(client_fd, buffer, BUFF_SIZE, 0);
+        if (bytes_received == -1) {
+            perror("recv");
+        } else if (bytes_received == 0) {
+            // Client has closed the connection
+            printf("Socket was closed incorrectly...\n");
+            break;
+        }else{
+            printf("Received %d bytes of data: %d\n", bytes_received, *((int *) buffer));
+        }
+
+        // getting pointer of proto
+        Chat__ClientPetition *cli_petition = chat__client_petition__unpack(NULL, bytes_received, buffer);
+        free(buffer);  // Free allocated buffer after unpacking
+        if (cli_petition == NULL) {
+            fprintf(stderr, "Error unpacking message\n");
+            exit(EXIT_FAILURE);
+        }
+
+        int option = cli_petition->option;
+        // void *datito = cli_petition->registration;
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("option %d\n", option);
+        // printf("pointer misterioso %p \n", datito);
+        pthread_mutex_unlock(&stdout_mutex);
+
+        // Clean up
+        chat__client_petition__free_unpacked(cli_petition, NULL);
+
+
+        switch(option){
+            case 7:
+                condition = 0;
+                break;
+
+            case 1:
+                printf("Look its raining!");
+                break;
+
+            default:
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion invalida \n");
+                pthread_mutex_unlock(&stdout_mutex);
+                break;
+        }
+
     }
-
-    // getting pointer of proto
-    Chat__ClientPetition *cli_petition = chat__client_petition__unpack(NULL, bytes_received, buffer);
-    free(buffer);  // Free allocated buffer after unpacking
-    if (cli_petition == NULL) {
-        fprintf(stderr, "Error unpacking message\n");
-        exit(EXIT_FAILURE);
-    }
-
-    int option = cli_petition->option;
-
-    pthread_mutex_lock(&stdout_mutex);
-    printf("option %d", option);
-    pthread_mutex_unlock(&stdout_mutex);
-
-    // Clean up
-    chat__client_petition__free_unpacked(cli_petition, NULL);
 
     // close socket
     close(client_fd);
