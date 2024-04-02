@@ -64,7 +64,6 @@ void receive_direct_message(int sockfd) {
         exit(EXIT_FAILURE);
     }
 
-    // Imprimir el mensaje en el formato deseado
     // Imprimir el mensaje en en verde
     printf("\033[0;32m%s: %s\033[0m\n", communication->sender, communication->message);
 
@@ -100,10 +99,10 @@ void send_exit_request(int sockfd) {
     send_client_petition(sockfd, &petition_exit);
 }
 
-void send_status_change_request(int sockfd, const char *status) {
+void send_status_change_request(int sockfd, const char *status, ClientInfo *client) {
     // Crear un mensaje de cambio de estado
     Chat__ChangeStatus change_status = CHAT__CHANGE_STATUS__INIT;
-    change_status.username = client.username;
+    change_status.username = client->username;
     change_status.status = (char *)status;
 
     // Crear una petición del cliente para cambiar de estado
@@ -115,7 +114,7 @@ void send_status_change_request(int sockfd, const char *status) {
     send_client_petition(sockfd, &petition_change_status);
 }
 
-void receive_server_response(int sockfd) {
+void receive_server_response(int sockfd, ClientInfo *client) {
     // Recibir la respuesta del servidor
     uint8_t buffer[MAX_MESSAGE_LEN];
     ssize_t bytes_received = recv(sockfd, buffer, MAX_MESSAGE_LEN, 0);
@@ -136,7 +135,7 @@ void receive_server_response(int sockfd) {
         case 3: // Cambio de estado
             if (response->code == 200) {
                 printf("Cambio de estado exitoso. Nuevo estado: %s\n", response->change->status);
-                strcpy(client.status, response->change->status); // Actualizar el estado del cliente localmente
+                strcpy(client->status, response->change->status); // Actualizar el estado del cliente localmente
             } else {
                 fprintf(stderr, "Error al cambiar de estado: %s\n", response->servermessage);
             }
@@ -246,8 +245,8 @@ int main(int argc, char *argv[]) {
                 printf("Seleccione su nuevo estado (ACTIVO, OCUPADO, INACTIVO): ");
                 fgets(input, sizeof(input), stdin);
                 input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del estado
-                send_status_change_request(sockfd, input);
-                receive_server_response(sockfd);
+                send_status_change_request(sockfd, input, &client);
+                receive_server_response(sockfd, &client);
                 break;
 
             case 4:
