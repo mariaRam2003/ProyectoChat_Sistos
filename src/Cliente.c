@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
 
@@ -18,33 +20,70 @@ typedef struct {
     int port;
 } ClientInfo;
 
-// Función para mostrar el menú
-void display_menu() {
-    printf("\n--- Menú ---\n");
-    printf("1. Chatear con todos los usuarios (broadcasting)\n");
-    printf("2. Enviar y recibir mensajes directos\n");
-    printf("3. Cambiar de status\n");
-    printf("4. Listar usuarios conectados\n");
-    printf("5. Desplegar información de un usuario\n");
-    printf("6. Ayuda\n");
-    printf("7. Salir\n");
-    printf("Seleccione una opción: ");
+// Estructura para pasar datos al hilo listener
+typedef struct {
+    int sockfd;
+    ClientInfo *client;
+} ListenerArgs;
+
+// Mutex para controlar el acceso a la impresión de mensajes
+pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Función para recibir mensajes del servidor
+void *listener_thread(void *arg) {
+    ListenerArgs *args = (ListenerArgs *)arg;
+
+    while (1) {
+        // Recibir el mensaje del servidor
+        uint8_t buffer[MAX_MESSAGE_LEN];
+        ssize_t bytes_received = recv(args->sockfd, buffer, MAX_MESSAGE_LEN, 0);
+        if (bytes_received <= 0) {
+            perror("Error al recibir mensaje del servidor");
+            exit(EXIT_FAILURE);
+        }
+
+        // Deserializar el mensaje de respuesta del servidor
+        Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
+        if (response == NULL) {
+            perror("Error al deserializar mensaje de respuesta del servidor");
+            exit(EXIT_FAILURE);
+        }
+
+        // Procesar la respuesta del servidor
+        pthread_mutex_lock(&print_mutex);
+        switch (response->option) {
+            case 2: // Mensaje directo
+                printf("\033[0;32m%s: %s\033[0m\n", response->messagecommunication->sender, response->messagecommunication->message);
+                break;
+            // Agregar casos para otras opciones de respuesta del servidor aquí
+            default:
+                fprintf(stderr, "Opción de respuesta del servidor no reconocida: %d\n", response->option);
+                break;
+        }
+        pthread_mutex_unlock(&print_mutex);
+
+        // Liberar la memoria de la respuesta del servidor
+        chat__server_response__free_unpacked(response, NULL);
+    }
+
+    return NULL;
 }
 
+// Función para enviar una petición del cliente al servidor
 void send_client_petition(int sockfd, const Chat__ClientPetition *petition) {
-    // Serializar el mensaje de petición del cliente
+    // Serializar la petición del cliente
     size_t message_len = chat__client_petition__get_packed_size(petition);
     uint8_t *message_buffer = malloc(message_len);
     chat__client_petition__pack(petition, message_buffer);
 
-    // Enviar el mensaje de petición del cliente al servidor
+    // Enviar la petición del cliente al servidor
     if (send(sockfd, message_buffer, message_len, 0) == -1) {
         perror("Error al enviar mensaje de petición del cliente al servidor");
         free(message_buffer);
         exit(EXIT_FAILURE);
     }
 
-    // Liberar memoria del mensaje de petición del cliente
+    // Liberar la memoria del mensaje serializado
     free(message_buffer);
 }
 
@@ -58,38 +97,41 @@ void receive_direct_message(int sockfd) {
     }
 
     // Deserializar el mensaje de comunicación
-    Chat__MessageCommunication *communication = chat__message_communication__unpack(NULL, bytes_received, buffer);
-    if (communication == NULL) {
+    Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
+    if (response == NULL) {
         perror("Error al deserializar mensaje de comunicación del servidor");
         exit(EXIT_FAILURE);
     }
 
-    // Imprimir el mensaje en en verde
-    printf("\033[0;32m%s: %s\033[0m\n", communication->sender, communication->message);
+    // Verificar si el mensaje es una respuesta exitosa
+    if (response->code == 200 && response->option == 2 && response->messagecommunication != NULL) {
+        // Imprimir el mensaje directo recibido
+        printf("\033[0;32m%s: %s\033[0m\n", response->messagecommunication->sender, response->messagecommunication->message);
+    } else {
+        // Imprimir el mensaje de error del servidor
+        fprintf(stderr, "Error del servidor: %s\n", response->servermessage);
+    }
 
-    // Liberar la memoria del mensaje de comunicación
-    chat__message_communication__free_unpacked(communication, NULL);
+    // Liberar la memoria de la respuesta del servidor
+    chat__server_response__free_unpacked(response, NULL);
 }
 
+// Función para enviar un mensaje directo al servidor
 void send_direct_message(int sockfd, const char *recipient, const char *message, const char *sender) {
     // Crear un mensaje de comunicación directa
     Chat__MessageCommunication communication_direct = CHAT__MESSAGE_COMMUNICATION__INIT;
     communication_direct.message = (char *)message;
-    communication_direct.recipient = (char *)recipient; // Asignar el destinatario correctamente
+    communication_direct.recipient = (char *)recipient;
     communication_direct.sender = (char *)sender;
 
     // Crear una petición del cliente para enviar un mensaje directo
     Chat__ClientPetition petition_direct = CHAT__CLIENT_PETITION__INIT;
-    petition_direct.option = 2; // Opción para enviar un mensaje directo
+    petition_direct.option = 4; // Opción para enviar un mensaje directo
     petition_direct.messagecommunication = &communication_direct;
 
     // Enviar la petición del cliente al servidor para enviar un mensaje directo
     send_client_petition(sockfd, &petition_direct);
-
-    // Recibir mensajes directos pendientes
-    receive_direct_message(sockfd);
 }
-
 
 void send_exit_request(int sockfd) {
     // Crear una petición del cliente para salir
@@ -100,6 +142,8 @@ void send_exit_request(int sockfd) {
     send_client_petition(sockfd, &petition_exit);
 }
 
+
+// Función para enviar una petición de cambio de estado al servidor
 void send_status_change_request(int sockfd, const char *status, ClientInfo *client) {
     // Crear un mensaje de cambio de estado
     Chat__ChangeStatus change_status = CHAT__CHANGE_STATUS__INIT;
@@ -115,6 +159,7 @@ void send_status_change_request(int sockfd, const char *status, ClientInfo *clie
     send_client_petition(sockfd, &petition_change_status);
 }
 
+// Función para recibir la respuesta del servidor
 void receive_server_response(int sockfd, ClientInfo *client) {
     // Recibir la respuesta del servidor
     uint8_t buffer[MAX_MESSAGE_LEN];
@@ -141,7 +186,10 @@ void receive_server_response(int sockfd, ClientInfo *client) {
                 fprintf(stderr, "Error al cambiar de estado: %s\n", response->servermessage);
             }
             break;
-        // Otros casos de respuesta del servidor aquí
+        // Agregar casos para otras opciones de respuesta del servidor aquí
+        default:
+            fprintf(stderr, "Opción de respuesta del servidor no reconocida: %d\n", response->option);
+            break;
     }
 
     // Liberar la memoria de la respuesta del servidor
@@ -194,11 +242,35 @@ int main(int argc, char *argv[]) {
     // Enviar la petición del cliente al servidor para el registro
     send_client_petition(sockfd, &petition_register);
 
+    // Crear argumentos para el hilo listener
+    ListenerArgs listener_args;
+    listener_args.sockfd = sockfd;
+    listener_args.client = &client;
+
+    // Crear el hilo listener para escuchar las respuestas del servidor
+    pthread_t listener_tid;
+    if (pthread_create(&listener_tid, NULL, listener_thread, (void *)&listener_args) != 0) {
+        perror("Error al crear el hilo listener");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
     // Bucle principal para mostrar el menú y procesar las opciones
     int option;
     char input[1024];
     while (1) {
-        display_menu();
+        // Mostrar el menú
+        printf("\n--- Menú ---\n");
+        printf("1. Chatear con todos los usuarios (broadcasting)\n");
+        printf("2. Enviar y recibir mensajes directos\n");
+        printf("3. Cambiar de status\n");
+        printf("4. Listar usuarios conectados\n");
+        printf("5. Desplegar información de un usuario\n");
+        printf("6. Ayuda\n");
+        printf("7. Salir\n");
+        printf("Seleccione una opción: ");
+        
+        // Leer la opción del usuario
         fgets(input, sizeof(input), stdin);
         sscanf(input, "%d", &option);
 
@@ -239,6 +311,10 @@ int main(int argc, char *argv[]) {
 
                 // Enviar el mensaje directo al servidor
                 send_direct_message(sockfd, recipient, input, client.username);
+
+                // Esperar y recibir la respuesta del servidor
+                receive_direct_message(sockfd);
+
                 break;
 
             case 3:
