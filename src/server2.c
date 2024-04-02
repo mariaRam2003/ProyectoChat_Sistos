@@ -20,7 +20,7 @@ int client_fds[MAX_CLIENTS];
 int free_spaces[MAX_CLIENTS] = {0};
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
-
+pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
  * @brief This struct holds the server information
  */
@@ -62,10 +62,11 @@ void send_message(char* recipient_, char* message_, char* sender_, int client_fd
     }
     chat__server_response__pack(&srvr_res, buffer);
 
-
+    pthread_mutex_lock(&socket_mutex);
     if (send(recipient_socket, buffer, len, 0) < 0){
         printf("Error sending message to recipient\n");
     }
+    pthread_mutex_unlock(&socket_mutex);
 
 }
 
@@ -195,7 +196,10 @@ void *handle_client(void *cli_sock_fd) {
 
         // reading bytes from client socket
         int bytes_received = recv(client_fd, buffer, BUFF_SIZE, 0);
-        if (bytes_received <= 0) {
+        if(bytes_received < 0){
+            printf("socket disconnected \n");
+            continue;
+        }else if (bytes_received == 0) {
             // Client has closed the connection
             pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
