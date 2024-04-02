@@ -16,6 +16,7 @@
 int client_count = 0;
 char* client_user_list[MAX_CLIENTS];
 char* client_ips[MAX_CLIENTS];
+char* client_status[MAX_CLIENTS];
 int client_fds[MAX_CLIENTS];
 int free_spaces[MAX_CLIENTS] = {0};
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -28,6 +29,47 @@ struct ServerInfo {
     int socket_fd;
     struct sockaddr_in server_addr;
 };
+
+void change_status(char* username, char* status, int client_fd){
+    int user_index = -1;
+    pthread_mutex_lock(&glob_var_mutex);
+    for (inr i = 0; i < MAX_CLIENTS; i++){
+        if (strcmp(username, client_user_list[i]) == 0){
+            user_index = i;
+        }
+    }
+    pthread_mutex_unlock(&glob_var_mutex);
+
+    if (user_index < 0){
+        printf("usuario no encontrado \n");
+        return;
+    }
+
+    pthread_mutex_lock(&glob_var_mutex);
+    client_status[user_index] = status;
+    pthread_mutex_unlock(&glob_var_mutex);
+
+
+    Chat__ServerResponse srvr_res = CHAT__SERVER_RESPONSE__INIT;
+    srvr_res.option = 3;
+    srvr_res.code = 200;
+    srvr_res.servermessage = "success\n";
+
+    size_t len = chat__server_response__get_packed_size(&srvr_res);
+    void* buffer = malloc(len);
+    if (buffer == NULL){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Error al alocar la memoria del buffer\n");
+        pthread_mutex_unlock(&stdout_mutex);
+    }
+
+    chat__server_response__pack(&srvr_res, buffer);
+    pthread_mutex_lock(&socket_mutex);
+    if (send(client_fd, buffer, len, 0) < 0){
+        printf("Error sending message to recipient\n");
+    }
+    pthread_mutex_unlock(&socket_mutex);
+}
 
 void send_message(char* recipient_, char* message_, char* sender_, int client_fd){
      int recipient_socket = -1;
@@ -253,21 +295,36 @@ void *handle_client(void *cli_sock_fd) {
                 break;
             }
             case 3: {
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion 3 Cambio de status\n");
+                pthread_mutex_unlock(&stdout_mutex);
+
+                Chat__ChangeStatus *ch_status = cli_petition->change;
+                char* user = ch_status->username;
+                char* status = ch_status->status;
+
+                change_status(user, status, client_fd);
                 break;
             }
 
             case 4: {
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion 4\n");
+                pthread_mutex_unlock(&stdout_mutex);
                 break;
             }
 
             case 5: {
+                printf("Opcion 5\n");
                 break;
             }
 
             case 6: {
+                printf("Opcion 6\n");
                 break;
             }
             case 7:{
+                printf("Opcion 7\n");
                 condition = 0;
                 break;
             }
