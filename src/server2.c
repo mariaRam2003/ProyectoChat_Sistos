@@ -41,6 +41,8 @@ void send_message(char* recipient_, char* message_, char* sender_, int client_fd
         }
     }
 
+    printf("recipient socket: %d\n", recipient_socket);
+
     Chat__ServerResponse srvr_res = CHAT__SERVER_RESPONSE__INIT;
 
     if (recipient_socket == -1){
@@ -227,7 +229,7 @@ void *handle_client(void *cli_sock_fd) {
         int option = cli_petition->option;
 
         switch(option){
-            case 1:
+            case 1: {
                 pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion 1 \n");
                 pthread_mutex_unlock(&stdout_mutex);
@@ -237,41 +239,44 @@ void *handle_client(void *cli_sock_fd) {
                 char *ip = registration->ip;
                 user_registration(username, ip, client_fd);
                 break;
+            }
 
-            case 2:
+            case 2: {
                 pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion 2 \n");
                 pthread_mutex_unlock(&stdout_mutex);
 
                 Chat__MessageCommunication *msgCom = cli_petition->messagecommunication;
-                char* message = msgCom->message;
-                char* recipient = msgCom->recipient;
-                char* sender = msgCom->sender;
-
-
+                char *message = msgCom->message;
+                char *recipient = msgCom->recipient;
+                char *sender = msgCom->sender;
                 break;
-
-            case 3:
+            }
+            case 3: {
                 break;
+            }
 
-            case 4:
+            case 4: {
                 break;
+            }
 
-            case 5:
+            case 5: {
                 break;
+            }
 
-            case 6:
+            case 6: {
                 break;
-
-            case 7:
+            }
+            case 7:{
                 condition = 0;
                 break;
-
-            default:
+            }
+            default: {
                 pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion invalida \n");
                 pthread_mutex_unlock(&stdout_mutex);
                 break;
+            }
         }
 
         // Clean up
