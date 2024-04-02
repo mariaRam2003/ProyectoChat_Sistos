@@ -74,9 +74,9 @@ void change_status(char* username, char* status, int client_fd){
 
 void send_message(char* recipient_, char* message_, char* sender_){
     int recipient_socket = -1;
-    // We look for the recipient's socket fd
+    // Buscamos el socket del destinatario
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (strcmp(client_user_list[i], recipient_) == 0) { // Compare strings for equality
+        if (strcmp(client_user_list[i], recipient_) != 0) { // Corregir la comparación
             printf("user list: %s\n", client_user_list[i]);
             printf("recipient: %s\n", recipient_);
             recipient_socket = client_fds[i];
@@ -89,7 +89,7 @@ void send_message(char* recipient_, char* message_, char* sender_){
     Chat__ServerResponse srvr_res = CHAT__SERVER_RESPONSE__INIT;
 
     if (recipient_socket == -1){
-        printf("Couldnt find recipient user\n");
+        printf("No se pudo encontrar al usuario destinatario\n");
         return;
     }
 
@@ -106,17 +106,17 @@ void send_message(char* recipient_, char* message_, char* sender_){
     size_t len = chat__server_response__get_packed_size(&srvr_res);
     void* buffer = malloc(len);
     if (buffer == NULL){
-        printf("Error at assigning buffer memory, option 2\n");
+        printf("Error al asignar memoria para el buffer, opción 2\n");
     }
     chat__server_response__pack(&srvr_res, buffer);
 
     pthread_mutex_lock(&socket_mutex);
     if (send(recipient_socket, buffer, len, 0) < 0){
-        printf("Error sending message to recipient\n");
+        printf("Error al enviar mensaje al destinatario\n");
     }
     pthread_mutex_unlock(&socket_mutex);
-
 }
+
 
 void send_everyone(char* message_, char* sender_){
     for (int i = 0; i < MAX_CLIENTS; i++){
