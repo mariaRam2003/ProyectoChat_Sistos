@@ -32,9 +32,12 @@ struct ServerInfo {
 void send_message(char* recipient_, char* message_, char* sender_, int client_fd){
      int recipient_socket = -1;
     // We look for the recipient's socket fd
-    for (int i = 0; i < MAX_CLIENTS; i++){
-        if (*client_user_list[i] == *recipient_){
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (strcmp(client_user_list[i], recipient_) == 0) { // Compare strings for equality
+            printf("user list: %s\n", client_user_list[i]);
+            printf("recipient: %s\n", recipient_);
             recipient_socket = client_fds[i];
+            break;
         }
     }
 
@@ -204,7 +207,7 @@ void *handle_client(void *cli_sock_fd) {
             pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
             pthread_mutex_unlock(&stdout_mutex);
-            continue;
+            break;
         }else{
             pthread_mutex_lock(&stdout_mutex);
             printf("Received %d bytes of data: %d\n", bytes_received, *((int *) buffer));
