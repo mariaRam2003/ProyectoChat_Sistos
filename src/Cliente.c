@@ -48,23 +48,6 @@ void send_client_petition(int sockfd, const Chat__ClientPetition *petition) {
     free(message_buffer);
 }
 
-void send_message_to_server(int sockfd, const char *message, const char *recipient, const char *sender) {
-    // Crear un mensaje de comunicación
-    Chat__MessageCommunication communication = CHAT__MESSAGE_COMMUNICATION__INIT;
-    communication.message = (char *)message;
-    communication.recipient = (char *)recipient;
-    communication.sender = (char *)sender;
-
-    // Crear una petición del cliente
-    Chat__ClientPetition petition = CHAT__CLIENT_PETITION__INIT;
-    petition.option = 5; // Opción para enviar un mensaje
-    petition.messagecommunication = &communication;
-
-
-    // Enviar la petición del cliente al servidor
-    send_client_petition(sockfd, &petition);
-}
-
 void receive_direct_message(int sockfd) {
     // Recibir el mensaje de comunicación del servidor
     uint8_t buffer[MAX_MESSAGE_LEN];
@@ -82,10 +65,87 @@ void receive_direct_message(int sockfd) {
     }
 
     // Imprimir el mensaje en el formato deseado
-    printf("%s: %s\n", communication->sender, communication->message);
+    // Imprimir el mensaje en en verde
+    printf("\033[0;32m%s: %s\033[0m\n", communication->sender, communication->message);
 
     // Liberar la memoria del mensaje de comunicación
     chat__message_communication__free_unpacked(communication, NULL);
+}
+
+void send_direct_message(int sockfd, const char *recipient, const char *message, const char *sender) {
+    // Crear un mensaje de comunicación directa
+    Chat__MessageCommunication communication_direct = CHAT__MESSAGE_COMMUNICATION__INIT;
+    communication_direct.message = (char *)message;
+    communication_direct.recipient = (char *)recipient;
+    communication_direct.sender = (char *)sender;
+
+    // Crear una petición del cliente para enviar un mensaje directo
+    Chat__ClientPetition petition_direct = CHAT__CLIENT_PETITION__INIT;
+    petition_direct.option = 4; // Opción para enviar un mensaje directo
+    petition_direct.messagecommunication = &communication_direct;
+
+    // Enviar la petición del cliente al servidor para enviar un mensaje directo
+    send_client_petition(sockfd, &petition_direct);
+
+    // Recibir mensajes directos pendientes
+    receive_direct_message(sockfd);
+}
+
+void send_exit_request(int sockfd) {
+    // Crear una petición del cliente para salir
+    Chat__ClientPetition petition_exit = CHAT__CLIENT_PETITION__INIT;
+    petition_exit.option = 7; // Opción para salir
+
+    // Enviar la petición del cliente al servidor para salir
+    send_client_petition(sockfd, &petition_exit);
+}
+
+void send_status_change_request(int sockfd, const char *status) {
+    // Crear un mensaje de cambio de estado
+    Chat__ChangeStatus change_status = CHAT__CHANGE_STATUS__INIT;
+    change_status.username = client.username;
+    change_status.status = (char *)status;
+
+    // Crear una petición del cliente para cambiar de estado
+    Chat__ClientPetition petition_change_status = CHAT__CLIENT_PETITION__INIT;
+    petition_change_status.option = 3; // Opción para cambiar de estado
+    petition_change_status.change = &change_status;
+
+    // Enviar la petición del cliente al servidor para cambiar de estado
+    send_client_petition(sockfd, &petition_change_status);
+}
+
+void receive_server_response(int sockfd) {
+    // Recibir la respuesta del servidor
+    uint8_t buffer[MAX_MESSAGE_LEN];
+    ssize_t bytes_received = recv(sockfd, buffer, MAX_MESSAGE_LEN, 0);
+    if (bytes_received <= 0) {
+        perror("Error al recibir respuesta del servidor");
+        exit(EXIT_FAILURE);
+    }
+
+    // Deserializar la respuesta del servidor
+    Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
+    if (response == NULL) {
+        perror("Error al deserializar respuesta del servidor");
+        exit(EXIT_FAILURE);
+    }
+
+    // Procesar la respuesta del servidor según la opción
+    switch (response->option) {
+        case 3: // Cambio de estado
+            if (response->code == 200) {
+                printf("Cambio de estado exitoso. Nuevo estado: %s\n", response->change->status);
+                strcpy(client.status, response->change->status); // Actualizar el estado del cliente localmente
+            } else {
+                fprintf(stderr, "Error al cambiar de estado: %s\n", response->servermessage);
+            }
+            break;
+        // Otros casos de respuesta del servidor aquí
+    }
+
+    // Liberar la memoria de la respuesta del servidor
+    chat__server_response__free_unpacked(response, NULL);
 }
 
 int main(int argc, char *argv[]) {
@@ -121,7 +181,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Crear un mensaje de registro
+    // Crear un mensaje de registro del usuario
     Chat__UserRegistration registration = CHAT__USER_REGISTRATION__INIT;
     registration.username = client.username;
     registration.ip = client.ip;
@@ -136,7 +196,7 @@ int main(int argc, char *argv[]) {
 
     // Bucle principal para mostrar el menú y procesar las opciones
     int option;
-    char input[10];
+    char input[1024];
     while (1) {
         display_menu();
         fgets(input, sizeof(input), stdin);
@@ -150,8 +210,18 @@ int main(int argc, char *argv[]) {
                 fgets(input, sizeof(input), stdin);
                 input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del mensaje
 
-                // Enviar el mensaje de broadcasting al servidor
-                send_message_to_server(sockfd, input, "", client.username);
+                // Crear un mensaje de comunicación
+                Chat__MessageCommunication communication_broadcast = CHAT__MESSAGE_COMMUNICATION__INIT;
+                communication_broadcast.message = input;
+                communication_broadcast.sender = client.username;
+
+                // Crear una petición del cliente para enviar un mensaje a todos los usuarios
+                Chat__ClientPetition petition_broadcast = CHAT__CLIENT_PETITION__INIT;
+                petition_broadcast.option = 4; // Opción para enviar un mensaje de broadcasting
+                petition_broadcast.messagecommunication = &communication_broadcast;
+
+                // Enviar la petición del cliente al servidor para enviar un mensaje a todos los usuarios
+                send_client_petition(sockfd, &petition_broadcast);
                 break;
 
             case 2:
@@ -168,15 +238,18 @@ int main(int argc, char *argv[]) {
                 input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del mensaje
 
                 // Enviar el mensaje directo al servidor
-                send_message_to_server(sockfd, input, recipient, client.username);
-
-                // Recibir mensajes directos pendientes
-                receive_direct_message(sockfd);
+                send_direct_message(sockfd, recipient, input, client.username);
                 break;
 
             case 3:
                 printf("Cambiar de status\n");
+                printf("Seleccione su nuevo estado (ACTIVO, OCUPADO, INACTIVO): ");
+                fgets(input, sizeof(input), stdin);
+                input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del estado
+                send_status_change_request(sockfd, input);
+                receive_server_response(sockfd);
                 break;
+
             case 4:
                 printf("Listar usuarios conectados\n");
                 break;
@@ -188,6 +261,8 @@ int main(int argc, char *argv[]) {
                 break;
             case 7:
                 printf("Salir\n");
+                // Enviar la petición para salir al servidor
+                send_exit_request(sockfd);
                 // Liberar memoria y cerrar socket al finalizar
                 close(sockfd);
                 exit(0);
