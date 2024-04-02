@@ -48,23 +48,6 @@ void send_client_petition(int sockfd, const Chat__ClientPetition *petition) {
     free(message_buffer);
 }
 
-void send_message_to_server(int sockfd, const char *message, const char *recipient, const char *sender) {
-    // Crear un mensaje de comunicación
-    Chat__MessageCommunication communication = CHAT__MESSAGE_COMMUNICATION__INIT;
-    communication.message = (char *)message;
-    communication.recipient = (char *)recipient;
-    communication.sender = (char *)sender;
-
-    // Crear una petición del cliente
-    Chat__ClientPetition petition = CHAT__CLIENT_PETITION__INIT;
-    petition.option = 5; // Opción para enviar un mensaje
-    petition.messagecommunication = &communication;
-
-
-    // Enviar la petición del cliente al servidor
-    send_client_petition(sockfd, &petition);
-}
-
 void receive_direct_message(int sockfd) {
     // Recibir el mensaje de comunicación del servidor
     uint8_t buffer[MAX_MESSAGE_LEN];
@@ -121,7 +104,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Crear un mensaje de registro
+    // Crear un mensaje de registro del usuario
     Chat__UserRegistration registration = CHAT__USER_REGISTRATION__INIT;
     registration.username = client.username;
     registration.ip = client.ip;
@@ -129,14 +112,14 @@ int main(int argc, char *argv[]) {
     // Crear una petición del cliente para el registro
     Chat__ClientPetition petition_register = CHAT__CLIENT_PETITION__INIT;
     petition_register.option = 1; // Opción para registro
-    petition_register.registration = &registration;
+    petition_register.registration = registration;
 
     // Enviar la petición del cliente al servidor para el registro
     send_client_petition(sockfd, &petition_register);
 
     // Bucle principal para mostrar el menú y procesar las opciones
     int option;
-    char input[10];
+    char input[1024];
     while (1) {
         display_menu();
         fgets(input, sizeof(input), stdin);
@@ -150,8 +133,18 @@ int main(int argc, char *argv[]) {
                 fgets(input, sizeof(input), stdin);
                 input[strcspn(input, "\n")] = '\0'; // Eliminar el carácter de nueva línea del final del mensaje
 
-                // Enviar el mensaje de broadcasting al servidor
-                send_message_to_server(sockfd, input, "", client.username);
+                // Crear un mensaje de comunicación
+                Chat__MessageCommunication communication_broadcast = CHAT__MESSAGE_COMMUNICATION__INIT;
+                communication_broadcast.message = input;
+                communication_broadcast.sender = client.username;
+
+                // Crear una petición del cliente para enviar un mensaje a todos los usuarios
+                Chat__ClientPetition petition_broadcast = CHAT__CLIENT_PETITION__INIT;
+                petition_broadcast.option = 4; // Opción para enviar un mensaje de broadcasting
+                petition_broadcast.messagecommunication = communication_broadcast;
+
+                // Enviar la petición del cliente al servidor para enviar un mensaje a todos los usuarios
+                send_client_petition(sockfd, &petition_broadcast);
                 break;
 
             case 2:
