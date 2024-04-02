@@ -204,7 +204,7 @@ void *handle_client(void *cli_sock_fd) {
             pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
             pthread_mutex_unlock(&stdout_mutex);
-            break;
+            continue;
         }else{
             pthread_mutex_lock(&stdout_mutex);
             printf("Received %d bytes of data: %d\n", bytes_received, *((int *) buffer));
