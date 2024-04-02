@@ -376,6 +376,11 @@ void *handle_client(void *cli_sock_fd) {
             }
 
             case 2: {
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion 2 info de usuarios \n");
+                pthread_mutex_unlock(&stdout_mutex);
+
+                get_all_users_info(client_fd);
                 break;
             }
             case 3: {
@@ -413,7 +418,14 @@ void *handle_client(void *cli_sock_fd) {
             }
 
             case 5: {
+                pthread_mutex_lock(&stdout_mutex);
                 printf("Opcion 5\n");
+                pthread_mutex_unlock(&stdout_mutex);
+
+                Chat__UserRequest *user = cli_petition->users;
+                char* username = user->user;
+
+                get_user_info(username, client_fd);
                 break;
             }
 
