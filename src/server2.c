@@ -29,10 +29,52 @@ struct ServerInfo {
     struct sockaddr_in server_addr;
 };
 
-void send_message(){
+void send_message(char* recipient_, char* message_, char* sender_, int client_fd){
+     int recipient_socket = -1;
+    // We look for the recipient's socket fd
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (*client_user_list[i] == *recipient_){
+            recipient_socket = client_fds[i];
+        }
+    }
+
+    Chat__ServerResponse srvr_res = CHAT__SERVER_RESPONSE__INIT;
+
+    if (recipient_socket == -1){
+        printf("Couldnt find recipient user\n");
+        return;
+    }
+
+    Chat__MessageCommunication msg = CHAT__MESSAGE_COMMUNICATION__INIT;
+    msg.message = message_;
+    msg.recipient = sender_;
+    msg.sender = recipient_;
+
+    srvr_res.option = 2;
+    srvr_res.code = 200;
+    srvr_res.servermessage = "success\n";
+    srvr_res.messagecommunication = &msg;
+
+    size_t len = chat__server_response__get_packed_size(&srvr_res);
+    void* buffer = malloc(len);
+    if (buffer == NULL){
+        printf("Error at assigning buffer memory, option 2\n");
+    }
+    chat__server_response__pack(&srvr_res, buffer);
+
+
+    if (send(recipient_socket, buffer, len, 0) < 0){
+        printf("Error sending message to recipient\n");
+    }
 
 }
 
+/**
+ * Function to register a user
+ * @param user the user to be registrated
+ * @param ip user's ip adress
+ * @param client_fd socket file descriptor form client
+ */
 void user_registration(char* user, char* ip, int client_fd){
     if (client_count >= MAX_CLIENTS){
         pthread_mutex_lock(&stdout_mutex);
@@ -153,9 +195,7 @@ void *handle_client(void *cli_sock_fd) {
 
         // reading bytes from client socket
         int bytes_received = recv(client_fd, buffer, BUFF_SIZE, 0);
-        if (bytes_received == -1) {
-            perror("recv");
-        } else if (bytes_received == 0) {
+        if (bytes_received <= 0) {
             // Client has closed the connection
             pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
@@ -174,7 +214,7 @@ void *handle_client(void *cli_sock_fd) {
             pthread_mutex_lock(&stdout_mutex);
             fprintf(stderr, "Error unpacking message\n");
             pthread_mutex_unlock(&stdout_mutex);
-            exit(EXIT_FAILURE);
+            return NULL;
         }
 
         int option = cli_petition->option;
@@ -192,6 +232,16 @@ void *handle_client(void *cli_sock_fd) {
                 break;
 
             case 2:
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Opcion 2 \n");
+                pthread_mutex_unlock(&stdout_mutex);
+
+                Chat__MessageCommunication *msgCom = cli_petition->messagecommunication;
+                char* message = msgCom->message;
+                char* recipient = msgCom->recipient;
+                char* sender = msgCom->sender;
+
+
                 break;
 
             case 3:
