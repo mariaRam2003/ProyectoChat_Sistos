@@ -33,7 +33,7 @@ struct ServerInfo {
 void change_status(char* username, char* status, int client_fd){
     int user_index = -1;
     pthread_mutex_lock(&glob_var_mutex);
-    for (inr i = 0; i < MAX_CLIENTS; i++){
+    for (int i = 0; i < MAX_CLIENTS; i++){
         if (strcmp(username, client_user_list[i]) == 0){
             user_index = i;
         }
@@ -71,7 +71,7 @@ void change_status(char* username, char* status, int client_fd){
     pthread_mutex_unlock(&socket_mutex);
 }
 
-void send_message(char* recipient_, char* message_, char* sender_, int client_fd){
+void send_message(char* recipient_, char* message_, char* sender_){
      int recipient_socket = -1;
     // We look for the recipient's socket fd
     for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -292,6 +292,8 @@ void *handle_client(void *cli_sock_fd) {
                 char *message = msgCom->message;
                 char *recipient = msgCom->recipient;
                 char *sender = msgCom->sender;
+
+                send_message(recipient, message, sender);
                 break;
             }
             case 3: {
