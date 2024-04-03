@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
-#define MAX_BUFF_SIZE 5000
+#define MAX_BUFF_SIZE 8192
 
 // USER REGISTRATION DONE OPTION 1
 
