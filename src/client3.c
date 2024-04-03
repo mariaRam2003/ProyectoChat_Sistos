@@ -11,6 +11,8 @@
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
 
+// USER REGISTRATION DONE OPTION 1
+
 // mutex
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
