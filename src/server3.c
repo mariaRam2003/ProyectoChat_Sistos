@@ -108,3 +108,11 @@ int main(int argc, char* argv[]){
     }
 
 }
+
+void* handle_client(void* sock_fd){
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Cliente conectau! \n");
+    pthread_mutex_unlock(&stdout_mutex);
+
+    printf("Conexion cerrada\n");
+}
