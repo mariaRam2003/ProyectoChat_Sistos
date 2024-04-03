@@ -63,6 +63,59 @@ void send_client_petition(int sockfd, Chat__ClientPetition* petition){
     free(buffer);
 }
 
+void* send_message(int sockfd, char* sender){
+    char input[1024];
+    printf("Ingrese el nombre del destinatario: ");
+    fgets(input, sizeof(input), stdin);
+
+    char recipient[50];
+    strcpy(recipient, input);
+
+    printf("Ingrese el mensaje a enviar a %s: ", recipient);
+    fgets(input, sizeof(input), stdin);
+
+    // Enviar el mensaje directo al servidor
+    Chat__MessageCommunication communication = CHAT__MESSAGE_COMMUNICATION__INIT;
+    communication.message = (char *)input;
+    communication.recipient = (char *)recipient;
+    communication.sender = (char *)sender;
+
+    // Crear una petición del cliente para enviar un mensaje de broadcasting
+    Chat__ClientPetition petition = CHAT__CLIENT_PETITION__INIT;
+    petition.option = 4;
+    petition.messagecommunication = &communication;
+
+    // Enviar la petición del cliente al servidor para enviar un mensaje de broadcasting
+    send_client_petition(sockfd, &petition);
+}
+
+
+/**
+ * Returns option chosen by the user in the menu
+ * @return integer
+ */
+int display_menu(){
+    int option;
+    char input[1024];
+
+    printf("\n--- Menú ---\n");
+    printf("1. Registro de Usuarios\n");
+    printf("2. Listar usuarios conectados\n");
+    printf("3. Cambiar de status\n");
+    printf("4. Enviar mensajes\n");
+    printf("5. Informacion de un usuario en particular\n");
+    printf("6. Ayuda\n");
+    printf("7. Salir\n");
+    printf("Seleccione una opción: ");
+
+    fgets(input, sizeof(input), stdin);
+    sscanf(input, "%d", &option);
+
+    return option;
+}
+
+
+
 void user_registration(char* username, char* ip, int sockfd){
     char status[] = "activo\n";
 
@@ -163,5 +216,50 @@ void* speaker(void* client_info){
     user_registration(client_information.username, client_information.ip, client_information.sock_fd);
 
     // entramos a un while para escuchar las peticiones del usuario
-    while(1){}
+    while(1){
+        int option = display_menu();
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("opcion elegida: %d\n", option);
+        pthread_mutex_unlock(&stdout_mutex);
+
+        switch (option) {
+            case 1: {
+                // Registro de usuarios
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Ya estas registrado tontito duhhh... \n");
+                pthread_mutex_unlock(&stdout_mutex);
+                break;
+            }
+            case 2: {
+                // Usuarios conectados
+                break;
+            };
+            case 3: {
+                // Cambio de estado
+                break;
+            };
+            case 4: {
+                // Enviar mensajes
+                send_message(client_information.sock_fd, client_information.username);
+                break;
+            };
+            case 5: {
+                // Informacion de un usuario en particular
+                break;
+            };
+            case 6: {
+                // Ayuda
+                break;
+            };
+            case 7: {
+                // Salida
+                break;
+            };
+            default:{
+                break;
+            }
+        }
+
+    }
 }
