@@ -181,72 +181,70 @@ void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
     char* user = user_req->user;
     char everyone[15] = "everyone";
 
-    // imprimimos lista de usuarios
+    // Lista de usuarios conectados
     print_user_list();
 
     if (strcmp(user, everyone) == 0){
+        // Crear una estructura de respuesta con la lista de usuarios conectados
+        Chat__ConnectedUsersResponse user_response = CHAT__CONNECTED_USERS_RESPONSE__INIT;
+
+        // Crear un array para almacenar los usuarios conectados
         Chat__UserInfo* user_info_array[MAX_CLIENTS];
 
+        int count = 0;
+        pthread_mutex_lock(&glob_var_mutex);
         for (int i = 0; i < MAX_CLIENTS; i++) {
             if (client_user_list[i] != NULL) {
-                // Allocate memory for a new Chat__UserInfo struct
+                // Asignar memoria para una nueva estructura Chat__UserInfo
                 Chat__UserInfo* user_info = malloc(sizeof(Chat__UserInfo));
                 if (user_info == NULL) {
-                    // Handle allocation failure
-                    fprintf(stderr, "Error: Unable to allocate memory for Chat__UserInfo\n");
+                    // Manejar fallo en la asignación de memoria
+                    fprintf(stderr, "Error: No se pudo asignar memoria para Chat__UserInfo\n");
                     exit(EXIT_FAILURE);
                 }
 
-                // Initialize the Chat__UserInfo struct
+                // Inicializar la estructura Chat__UserInfo
                 chat__user_info__init(user_info);
 
-                // Assign values to the fields
-                user_info->username = client_user_list[i];
-                user_info->ip = client_ips[i];
-                user_info->status = client_status[i];
+                // Asignar valores a los campos
+                user_info->username = strdup(client_user_list[i]);
+                user_info->ip = strdup(client_ips[i]);
+                user_info->status = strdup(client_status[i]);
 
-                // Store the pointer in user_info_array
-                user_info_array[i] = user_info;
+                // Almacenar el puntero en el array
+                user_info_array[count++] = user_info;
             }
         }
+        pthread_mutex_unlock(&glob_var_mutex);
 
-        Chat__ConnectedUsersResponse user_response = CHAT__CONNECTED_USERS_RESPONSE__INIT;
+        // Asignar la lista de usuarios conectados a la respuesta
         user_response.connectedusers = user_info_array;
+        user_response.n_connectedusers = count;
 
+        // Crear la respuesta del servidor
         Chat__ServerResponse server_response = CHAT__SERVER_RESPONSE__INIT;
         server_response.option = 2;
         server_response.code = 200;
-        server_response.servermessage = "ayuda porfavor Aaaa";
-
+        server_response.servermessage = "Lista de usuarios conectados";
         server_response.connectedusers = &user_response;
 
+        // Serializar la respuesta del servidor
         size_t len = chat__server_response__get_packed_size(&server_response);
         void* buffer = malloc(len);
         if (buffer == NULL){
-            pthread_mutex_lock(&stdout_mutex);
-            printf("Error assigning memory \n");
-            pthread_mutex_unlock(&stdout_mutex);
+            perror("Error al asignar memoria");
             return;
         }
-
         chat__server_response__pack(&server_response, buffer);
 
-        if(send(client_fd, buffer, len, 0) < 0){
-            pthread_mutex_lock(&stdout_mutex);
-            printf("Error sending message to client\n");
-            pthread_mutex_unlock(&stdout_mutex);
-            return;
+        // Enviar la respuesta al cliente
+        if (send(client_fd, buffer, len, 0) < 0){
+            perror("Error al enviar mensaje al cliente");
         }
-
-        pthread_mutex_lock(&stdout_mutex);
-        printf("Response sent back to client\n");
-        pthread_mutex_unlock(&stdout_mutex);
-
+        free(buffer);
     }
-
-
-
 }
+
 
 
 void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){

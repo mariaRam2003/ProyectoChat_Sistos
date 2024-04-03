@@ -70,6 +70,37 @@ void send_client_petition(int sockfd, Chat__ClientPetition* petition){
     free(buffer);
 }
 
+void request_connected_users(int sockfd) {
+    // Crear la estructura de solicitud de usuarios conectados
+    Chat__UserRequest user_request = CHAT__USER_REQUEST__INIT;
+    user_request.user = "everyone";
+
+    // Crear la estructura de petición del cliente
+    Chat__ClientPetition client_petition = CHAT__CLIENT_PETITION__INIT;
+    client_petition.option = 2; // Opción para obtener usuarios conectados
+    client_petition.users = &user_request;
+
+    // Enviar la petición al servidor
+    send_client_petition(sockfd, &client_petition);
+}
+
+void handle_connected_users(Chat__UserInfo** user_response, int user_count) {
+    if (user_response == NULL) {
+        printf("No se encontró información de usuarios conectados.\n");
+        return;
+    }
+
+    printf("Usuarios conectados:\n");
+
+    for (int i = 0; i < user_count; i++) {
+        Chat__UserInfo* user_info = user_response[i];
+        printf("Nombre de usuario: %s\n", user_info->username);
+        printf("IP: %s\n", user_info->ip);
+        printf("Estado: %s\n", user_info->status);
+    }
+}
+
+
 void send_change_status(int sockfd, char* username, char* status){
     // Crear el mensaje de cambio de estado
     Chat__ChangeStatus change_status = CHAT__CHANGE_STATUS__INIT;
@@ -214,20 +245,19 @@ int main(int argc, char *argv[]) {
     printf("conectado al servidor...\n");
 
     // Desde aquí se mandan los requests del usuario
-    pthread_t thread_speak, thread_listen, thread_inactive;
+    pthread_t thread_speak, thread_listen;
     pthread_create(&thread_speak, NULL, speaker, (void *)&client);
     pthread_create(&thread_listen, NULL, listener, (void *)&sockfd);
-    pthread_create(&thread_inactive, NULL, set_inactive, (void *)&client);
 
     // Para que el file descriptor no se cierre hasta que ambos procesos culminen
     pthread_join(thread_speak, NULL);
     pthread_join(thread_listen, NULL);
-    pthread_join(thread_inactive, NULL);
 
     close(sockfd);
     printf("Conexion cerrada!\n");
     return 0;
 }
+
 
 void* listener(void* sock_fd){
     int sockfd = *((int *) sock_fd);
@@ -236,6 +266,11 @@ void* listener(void* sock_fd){
     while(1){
         // Recibir el mensaje de broadcasting del servidor
         char buffer[MAX_BUFF_SIZE];
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Estoy escuchando ...\n");
+        pthread_mutex_unlock(&stdout_mutex);
+
         ssize_t bytes_received = recv(sockfd, buffer, MAX_BUFF_SIZE, 0);
         if (bytes_received <= 0) {
             perror("Error al recibir mensaje de broadcasting del servidor");
@@ -268,6 +303,14 @@ void* listener(void* sock_fd){
                 break;
             }
             case 2:{
+                // Manejar respuesta de usuarios conectados
+                if (response->connectedusers != NULL) {
+                    Chat__ConnectedUsersResponse* user_response = response->connectedusers;
+                    int user_count = user_response->n_connectedusers;
+                    handle_connected_users(user_response->connectedusers, user_count); // Corregir este llamado
+                } else {
+                    printf("No hay usuarios conectados.\n");
+                }
                 break;
             }
             case 3:{
@@ -277,9 +320,6 @@ void* listener(void* sock_fd){
                 break;
             }
             case 5:{
-                // Manejar respuesta de información de usuario en particular
-                Chat__ConnectedUsersResponse* user_response = response->connectedusers;
-                handle_user_info(user_response);
                 break;
             }
             case 6:{
@@ -294,6 +334,7 @@ void* listener(void* sock_fd){
         chat__server_response__free_unpacked(response, NULL);
     }
 }
+
 
 void* speaker(void* client_info){
     ClientInfo client_information = *((ClientInfo*) client_info);
@@ -318,7 +359,8 @@ void* speaker(void* client_info){
                 break;
             }
             case 2: {
-                // Usuarios conectados
+                // Listar usuarios conectados
+                request_connected_users(client_information.sock_fd);
                 break;
             };
             case 3: {
