@@ -217,11 +217,12 @@ void* listener(void* sock_fd){
     // entramos a un while para escuchar los requests y respuestas que nos puedan llegar
     while(1){
         // Recibir el mensaje de broadcasting del servidor
-        void* buffer = malloc(MAX_BUFF_SIZE);
+        char buffer[MAX_BUFF_SIZE];
         ssize_t bytes_received = recv(sockfd, buffer, MAX_BUFF_SIZE, 0);
         if (bytes_received <= 0) {
             perror("Error al recibir mensaje de broadcasting del servidor");
             exit(EXIT_FAILURE);
+            continue;
         }
 
         pthread_mutex_lock(&stdout_mutex);
@@ -231,8 +232,10 @@ void* listener(void* sock_fd){
         // Deserializar el mensaje de broadcasting
         Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
         if (response == NULL) {
+            pthread_mutex_lock(&stdout_mutex);
             perror("Error al deserializar mensaje de broadcasting del servidor");
-            exit(EXIT_FAILURE);
+            pthread_mutex_unlock(&stdout_mutex);
+            continue;
         }
 
         int code = response->code;
