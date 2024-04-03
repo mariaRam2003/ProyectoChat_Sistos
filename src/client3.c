@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
+#define MAX_BUFF_SIZE 5000
 
 // USER REGISTRATION DONE OPTION 1
 
@@ -33,6 +34,17 @@ typedef struct {
 void* listener(void* sock_fd);
 
 void* speaker(void* sock_fd);
+
+void listen_message(Chat__ServerResponse *response){
+    Chat__MessageCommunication *msgComm = response->messagecommunication;
+    char* message = msgComm->message;
+    char* recipient = msgComm->recipient;
+    char* sender = msgComm->sender;
+
+    pthread_mutex_lock(&stdout_mutex);
+    printf("%s: %s", sender, message);
+    pthread_mutex_unlock(&stdout_mutex);
+}
 
 void send_client_petition(int sockfd, Chat__ClientPetition* petition){
     size_t len = chat__client_petition__get_packed_size(petition);
@@ -200,8 +212,60 @@ int main(int argc, char *argv[]) {
  * @return
  */
 void* listener(void* sock_fd){
+    int sockfd = *((int *) sock_fd);
+
     // entramos a un while para escuchar los requests y respuestas que nos puedan llegar
-    while(1){}
+    while(1){
+        // Recibir el mensaje de broadcasting del servidor
+        uint8_t buffer[MAX_BUFF_SIZE];
+        ssize_t bytes_received = recv(sockfd, buffer, MAX_BUFF_SIZE, 0);
+        if (bytes_received <= 0) {
+            perror("Error al recibir mensaje de broadcasting del servidor");
+            exit(EXIT_FAILURE);
+        }
+
+        // Deserializar el mensaje de broadcasting
+        Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
+        if (response == NULL) {
+            perror("Error al deserializar mensaje de broadcasting del servidor");
+            exit(EXIT_FAILURE);
+        }
+
+        int code = response->code;
+        int option = response->option;
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("opcion elegida: %d\n", option);
+        pthread_mutex_unlock(&stdout_mutex);
+
+        switch(option){
+            case 1:{
+                break;
+            }
+            case 2:{
+                break;
+            }
+            case 3:{
+                break;
+            }
+            case 4:{
+                break;
+            }
+            case 5:{
+                break;
+            }
+            case 6:{
+                break;
+            }
+            case 7:{
+                break;
+            }
+        }
+
+        // Liberar la memoria de la respuesta del servidor
+        chat__server_response__free_unpacked(response, NULL);
+
+    }
 }
 
 /**
