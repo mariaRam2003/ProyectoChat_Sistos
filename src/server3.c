@@ -12,7 +12,11 @@
 #include "proto/chat_protocol.pb-c.h"
 
 #define MAX_CLIENTS 10
-#define BUFF_SIZE 5000
+#define BUFF_SIZE 8192
+
+// define memory usage
+#define MESSAGE_LEN 200
+#define USER_LEN 20
 
 int client_count = 0;
 
@@ -26,7 +30,63 @@ pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
 void *handle_client(void* sock_fd);
+
+void add_client(char* user, char* ip, char* status){
+    char* new_user = malloc(USER_LEN);
+    char* new_ip = malloc(USER_LEN);
+    char* new_status = malloc(USER_LEN);
+    strcpy(new_user, user);
+    strcpy(new_ip, ip);
+    strcpy(new_status, status);
+
+    pthread_mutex_lock(&glob_var_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (client_user_list[i] == NULL){
+            client_user_list[i] = new_user;
+            client_ips[i] = new_ip;
+            client_status[i] = new_status;
+            client_count++;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&glob_var_mutex);
+}
+
+void print_user_list(){
+    pthread_mutex_lock(&glob_var_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (client_user_list[i] != NULL){
+            pthread_mutex_lock(&stdout_mutex);
+            printf("user: %s\n", client_user_list[i]);
+            pthread_mutex_unlock(&stdout_mutex);
+        }
+    }
+    pthread_mutex_unlock(&glob_var_mutex);
+}
+
+void handle_add_client(Chat__ClientPetition* cli_petition){
+    Chat__UserRegistration *registration = cli_petition->registration;
+    char* username = registration->username;
+    char* ip = registration->ip;
+    char state[20] = "activo";
+
+    add_client(username, ip, state);
+}
+
+
+void option_manager(int option, int sockdf, Chat__ClientPetition* cli_petition){
+
+    switch(option){
+        case 1:{
+            handle_add_client(cli_petition);
+            print_user_list();
+            break;
+        }
+
+    }
+}
 
 /**
  * @brief This struct holds the server information
@@ -103,16 +163,52 @@ int main(int argc, char* argv[]){
 
         pthread_t thread;
         pthread_create(&thread, NULL, handle_client, (void *) &client_socket);
-
-        client_count++;
     }
 
 }
 
 void* handle_client(void* sock_fd){
-    pthread_mutex_lock(&stdout_mutex);
-    printf("Cliente conectau! \n");
-    pthread_mutex_unlock(&stdout_mutex);
+    int client_fd = *((int*) sock_fd);
 
-    printf("Conexion cerrada\n");
+    while(1){
+        void *buffer = malloc(BUFF_SIZE);
+        int bytes_recieved =recv(client_fd, buffer, BUFF_SIZE, 0);
+
+        if( bytes_recieved < 0){
+            pthread_mutex_lock(&stdout_mutex);
+            printf("Error at reading bytes...\n");
+            pthread_mutex_unlock(&stdout_mutex);
+            return NULL;
+        }else if(bytes_recieved == 0){
+            pthread_mutex_lock(&stdout_mutex);
+            printf("Socket was closed incorrectly...\n");
+            pthread_mutex_unlock(&stdout_mutex);
+            return NULL;
+            // TODO: manejar salida
+        }
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Received %d bytes of data: %d\n", bytes_recieved, *((int *) buffer));
+        pthread_mutex_unlock(&stdout_mutex);
+
+        Chat__ClientPetition *cli_petition = chat__client_petition__unpack(NULL, bytes_recieved, buffer);
+        free(buffer);
+
+        if (cli_petition == NULL) {
+            pthread_mutex_lock(&stdout_mutex);
+            fprintf(stderr, "Error unpacking message\n");
+            pthread_mutex_unlock(&stdout_mutex);
+            return NULL;
+        }
+
+        int option = cli_petition->option;
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("opcion elegida: %d \n", option);
+        pthread_mutex_unlock(&stdout_mutex);
+
+        option_manager(option, client_fd, cli_petition);
+
+        chat__client_petition__free_unpacked(cli_petition, NULL);
+    }
 }
