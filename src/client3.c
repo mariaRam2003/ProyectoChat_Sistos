@@ -11,18 +11,14 @@
 #include <protobuf-c/protobuf-c.h>
 #include "proto/chat_protocol.pb-c.h"
 #define MAX_BUFF_SIZE 8192
-
-// USER REGISTRATION DONE OPTION 1
+#define MESSAGE_LEN 200
+#define USER_LEN 20
 
 // mutex
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-
-/**
- *
- */
 typedef struct {
     char username[50];
     char status[20];
@@ -75,37 +71,25 @@ void send_client_petition(int sockfd, Chat__ClientPetition* petition){
     free(buffer);
 }
 
-void* send_message(int sockfd, char* sender){
-    char input[1024];
-    printf("Ingrese el nombre del destinatario: ");
-    fgets(input, sizeof(input), stdin);
+void send_change_status(int sockfd, char* username, char* status){
+    // Crear el mensaje de cambio de estado
+    Chat__ChangeStatus change_status = CHAT__CHANGE_STATUS__INIT;
+    change_status.username = strdup(username); // Copiar el valor del nombre de usuario
+    change_status.status = strdup(status);     // Copiar el valor del estado
 
-    char recipient[50];
-    strcpy(recipient, input);
+    // Crear la petición del cliente para cambiar el estado
+    Chat__ClientPetition petition_change_status = CHAT__CLIENT_PETITION__INIT;
+    petition_change_status.option = 3; // Opción para cambio de estado
+    petition_change_status.change = &change_status;
 
-    printf("Ingrese el mensaje a enviar a %s: ", recipient);
-    fgets(input, sizeof(input), stdin);
+    // Enviar la petición del cliente al servidor para cambiar el estado
+    send_client_petition(sockfd, &petition_change_status);
 
-    // Enviar el mensaje directo al servidor
-    Chat__MessageCommunication communication = CHAT__MESSAGE_COMMUNICATION__INIT;
-    communication.message = (char *)input;
-    communication.recipient = (char *)recipient;
-    communication.sender = (char *)sender;
-
-    // Crear una petición del cliente para enviar un mensaje de broadcasting
-    Chat__ClientPetition petition = CHAT__CLIENT_PETITION__INIT;
-    petition.option = 4;
-    petition.messagecommunication = &communication;
-
-    // Enviar la petición del cliente al servidor para enviar un mensaje de broadcasting
-    send_client_petition(sockfd, &petition);
+    // Liberar la memoria asignada por strdup
+    free(change_status.username);
+    free(change_status.status);
 }
 
-
-/**
- * Returns option chosen by the user in the menu
- * @return integer
- */
 int display_menu(){
     int option;
     char input[1024];
@@ -126,10 +110,24 @@ int display_menu(){
     return option;
 }
 
-
-
 void user_registration(char* username, char* ip, int sockfd){
     char status[] = "activo\n";
+
+    // Verificar la longitud del nombre de usuario y la dirección IP
+    if (strlen(username) >= USER_LEN) {
+        fprintf(stderr, "Error: El nombre de usuario debe tener menos de %d caracteres\n", USER_LEN);
+        return;
+    }
+    if (strlen(ip) >= INET_ADDRSTRLEN) {
+        fprintf(stderr, "Error: La dirección IP debe tener menos de %d caracteres\n", INET_ADDRSTRLEN);
+        return;
+    }
+
+    // Verificar la longitud de la cadena de estado
+    if (strlen(status) >= MESSAGE_LEN) {
+        fprintf(stderr, "Error: El estado debe tener menos de %d caracteres\n", MESSAGE_LEN);
+        return;
+    }
 
     Chat__UserRegistration registration = CHAT__USER_REGISTRATION__INIT;
     registration.username = username;
@@ -148,12 +146,7 @@ void user_registration(char* username, char* ip, int sockfd){
     send_client_petition(sockfd, &petition_register);
 }
 
-/**
- *
- * @param argc
- * @param argv
- * @return
- */
+
 int main(int argc, char *argv[]) {
     // Verificar argumentos de línea de comandos
     if (argc != 4) {
@@ -205,12 +198,6 @@ int main(int argc, char *argv[]) {
     printf("Conexion cerrada!\n");
 }
 
-
-/**
- * This function listens for any incoming responses from the server
- * @param sock_fd
- * @return
- */
 void* listener(void* sock_fd){
     int sockfd = *((int *) sock_fd);
 
@@ -275,11 +262,6 @@ void* listener(void* sock_fd){
     }
 }
 
-/**
- * This function sends users requests over to the server
- * @param sock_fd
- * @return
- */
 void* speaker(void* client_info){
     ClientInfo client_information = *((ClientInfo*) client_info);
 
@@ -308,11 +290,16 @@ void* speaker(void* client_info){
             };
             case 3: {
                 // Cambio de estado
+                char new_status[20];
+                pthread_mutex_lock(&stdout_mutex);
+                printf("Ingrese el nuevo estado (ACTIVO, OCUPADO o INACTIVO): ");
+                fgets(new_status, sizeof(new_status), stdin);
+                pthread_mutex_unlock(&stdout_mutex);
+                send_change_status(client_information.sock_fd, client_information.username, new_status);
                 break;
             };
             case 4: {
                 // Enviar mensajes
-                send_message(client_information.sock_fd, client_information.username);
                 break;
             };
             case 5: {
