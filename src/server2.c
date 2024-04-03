@@ -425,7 +425,6 @@ void *handle_client(void *cli_sock_fd) {
                 } else{
                     send_message(recipient, message, sender);
                 }
-
                 break;
             }
 
