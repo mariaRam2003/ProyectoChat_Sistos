@@ -34,6 +34,7 @@ pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *handle_client(void* sock_fd);
 
+void handle_state_change(Chat__ClientPetition* cli_petition, int my_sockfd){}
 
 int get_sock_fd(char* user){
     for(int i = 0; i < MAX_CLIENTS; i++){
@@ -55,9 +56,9 @@ void send_one_msg(Chat__ClientPetition* cli_petition, int my_sockfd){
     int rec_sockfd = get_sock_fd(rec);
 
     Chat__MessageCommunication comm = CHAT__MESSAGE_COMMUNICATION__INIT;
-    comm.message = msg;
-    comm.sender = sender;
-    comm.recipient = rec;
+    comm.message = strdup(msg);
+    comm.sender = strdup(sender);
+    comm.recipient = strdup(rec);
 
     Chat__ServerResponse srvr_response = CHAT__SERVER_RESPONSE__INIT;
     srvr_response.option = 4;
@@ -81,18 +82,32 @@ void send_one_msg(Chat__ClientPetition* cli_petition, int my_sockfd){
     pthread_mutex_unlock(&stdout_mutex);
 
     free(buffer);
-
 }
+
 void broadcast(Chat__ClientPetition* cli_petition, int my_sockfd){
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Llegue a la funcion broadcast\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
     Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
     char* msg = msgComm->message;
     char* rec = msgComm->recipient;
     char* sender = msgComm->sender;
 
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Llegue a la msgComm \n");
+    pthread_mutex_unlock(&stdout_mutex);
+
+
     Chat__MessageCommunication comm = CHAT__MESSAGE_COMMUNICATION__INIT;
-    comm.message = msg;
-    comm.sender = sender;
-    comm.recipient = rec;
+    comm.message = strdup(msg);
+    comm.sender = strdup(sender);
+    comm.recipient = strdup(rec);
+
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Llegue a commm\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
 
     Chat__ServerResponse srvr_response = CHAT__SERVER_RESPONSE__INIT;
     srvr_response.option = 4;
@@ -100,8 +115,16 @@ void broadcast(Chat__ClientPetition* cli_petition, int my_sockfd){
     srvr_response.servermessage = "Se meando el mensaje yupi \n";
     srvr_response.messagecommunication = &comm;
 
+
+    pthread_mutex_lock(&stdout_mutex);
+    printf("srvr response\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
     size_t len = chat__server_response__get_packed_size(&srvr_response);
     void* buffer = malloc(len);
+    if (buffer == NULL){
+        perror("No se pudo asignar memoria al buffer\n");
+    }
 
     chat__server_response__pack(&srvr_response, buffer);
 
@@ -118,17 +141,33 @@ void broadcast(Chat__ClientPetition* cli_petition, int my_sockfd){
             }
         }
     }
+    free(buffer);
 }
 
 void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
+
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Llegue a handle send message\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
     Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
     char* rec = msgComm->recipient;
     char everyone[20] = "everyone";
 
+    pthread_mutex_lock(&stdout_mutex);
+    printf("everyone dec\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
     if (strcmp(everyone, rec) == 0){
-        send_one_msg(cli_petition, my_sockfd);
-    }else{
         broadcast(cli_petition, my_sockfd);
+        pthread_mutex_lock(&stdout_mutex);
+        printf("comparison 2\n");
+        pthread_mutex_unlock(&stdout_mutex);
+    }else{
+        pthread_mutex_lock(&stdout_mutex);
+        printf("comparison 1\n");
+        pthread_mutex_unlock(&stdout_mutex);
+        send_one_msg(cli_petition, my_sockfd);
     }
 
 }
@@ -259,6 +298,10 @@ void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
             print_user_list();
             handle_user_list(cli_petition, sockfd);
             break;
+        }
+        case 3:{
+            // cambio de estado
+            handle_state_change(cli_petition, sockfd);
         }
         case 4:{
             // Enviar mensaje
