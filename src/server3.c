@@ -34,7 +34,23 @@ pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *handle_client(void* sock_fd);
 
-void handle_state_change(Chat__ClientPetition* cli_petition, int my_sockfd){}
+void handle_state_change(Chat__ClientPetition* cli_petition, int my_sockfd){
+    Chat__ChangeStatus *change_status = cli_petition->change;
+    char* user = strdup(change_status->username);
+    char* status = strdup(change_status->status);
+
+    pthread_mutex_lock(&glob_var_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (strcmp(client_user_list[i], user) == 0){
+            client_user_list[i] = status;
+
+            pthread_mutex_lock(&stdout_mutex);
+            printf("status de %s cambiado con exito a %s \n", user, status);
+            pthread_mutex_unlock(&stdout_mutex);
+        }
+    }
+    pthread_mutex_unlock(&glob_var_mutex);
+}
 
 int get_sock_fd(char* user){
     for(int i = 0; i < MAX_CLIENTS; i++){
@@ -290,11 +306,12 @@ void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
 
     switch(option){
         case 1:{
+            // registrar el usuario
             handle_add_client(cli_petition, sockfd);
-            //print_user_list();
             break;
         }
         case 2:{
+            // lista de usuarios
             print_user_list();
             handle_user_list(cli_petition, sockfd);
             break;
