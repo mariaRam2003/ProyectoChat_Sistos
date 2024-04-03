@@ -144,6 +144,37 @@ void user_registration(char* username, char* ip, int sockfd){
     send_client_petition(sockfd, &petition_register);
 }
 
+void request_user_info(int sockfd, const char* username) {
+    // Crear la estructura de solicitud de información de usuario
+    Chat__UserRequest user_request = CHAT__USER_REQUEST__INIT;
+    user_request.user = (char*)username;
+
+    // Crear la estructura de petición del cliente
+    Chat__ClientPetition client_petition = CHAT__CLIENT_PETITION__INIT;
+    client_petition.option = 5; // Opción para obtener información de un usuario en particular
+    client_petition.users = &user_request;
+
+    // Enviar la petición al servidor
+    send_client_petition(sockfd, &client_petition);
+}
+
+void handle_user_info(Chat__ConnectedUsersResponse* user_response) {
+    if (user_response == NULL) {
+        printf("No se encontró información para el usuario solicitado.\n");
+        return;
+    }
+
+    int user_count = user_response->n_connectedusers;
+    printf("Información del usuario:\n");
+
+    for (int i = 0; i < user_count; i++) {
+        Chat__UserInfo* user_info = user_response->connectedusers[i];
+        printf("Nombre de usuario: %s\n", user_info->username);
+        printf("IP: %s\n", user_info->ip);
+        printf("Estado: %s\n", user_info->status);
+    }
+}
+
 int main(int argc, char *argv[]) {
     // Verificar argumentos de línea de comandos
     if (argc != 4) {
@@ -246,6 +277,9 @@ void* listener(void* sock_fd){
                 break;
             }
             case 5:{
+                // Manejar respuesta de información de usuario en particular
+                Chat__ConnectedUsersResponse* user_response = response->connectedusers;
+                handle_user_info(user_response);
                 break;
             }
             case 6:{
@@ -303,6 +337,13 @@ void* speaker(void* client_info){
             };
             case 5: {
                 // Informacion de un usuario en particular
+                char target_username[USER_LEN];
+                printf("Ingrese el nombre de usuario del que desea obtener información: ");
+                fgets(target_username, sizeof(target_username), stdin);
+                // Eliminar el salto de línea del final
+                target_username[strcspn(target_username, "\n")] = 0;
+                // Enviar la solicitud de información de usuario al servidor
+                request_user_info(client_information.sock_fd, target_username);
                 break;
             };
             case 6: {
