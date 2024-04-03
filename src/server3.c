@@ -24,6 +24,7 @@ int client_count = 0;
 char* client_user_list[MAX_CLIENTS];
 char* client_ips[MAX_CLIENTS];
 char* client_status[MAX_CLIENTS];
+int sock_fds[MAX_CLIENTS];
 
 // mutex
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -33,7 +34,54 @@ pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *handle_client(void* sock_fd);
 
-void add_client(char* user, char* ip, char* status){
+
+int get_sock_fd(char* user){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if (strcmp(user, client_user_list[i]) == 0){
+            int sock_fd = sock_fds[i];
+            return sock_fd;
+        }
+    }
+
+    return -1;
+}
+
+void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
+    Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
+    char* msg = msgComm->message;
+    char* rec = msgComm->recipient;
+    char* sender = msgComm->sender;
+
+    int rec_sockfd = get_sock_fd(rec);
+
+    Chat__MessageCommunication comm = CHAT__MESSAGE_COMMUNICATION__INIT;
+    comm.message = msg;
+    comm.sender = sender;
+    comm.recipient = rec;
+
+    Chat__ServerResponse srvr_response = CHAT__SERVER_RESPONSE__INIT;
+    srvr_response.option = 4;
+    srvr_response.code = 200;
+    srvr_response.servermessage = "Se meando el mensaje yupi \n";
+    srvr_response.messagecommunication = &comm;
+
+    size_t len = chat__server_response__get_packed_size(&srvr_response);
+    void* buffer = malloc(len);
+
+    if (send(rec_sockfd, buffer, len, 0) < 0){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("error al mendarle el mensaje al cliente\n");
+        pthread_mutex_unlock(&stdout_mutex);
+    }
+
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Se mando el mensaje al cliente\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
+    free(buffer);
+}
+
+void add_client(char* user, char* ip, char* status, int sock_fd){
     char* new_user = malloc(USER_LEN);
     char* new_ip = malloc(USER_LEN);
     char* new_status = malloc(USER_LEN);
@@ -47,6 +95,7 @@ void add_client(char* user, char* ip, char* status){
             client_user_list[i] = new_user;
             client_ips[i] = new_ip;
             client_status[i] = new_status;
+            sock_fds[i] = sock_fd;
             client_count++;
             break;
         }
@@ -66,13 +115,13 @@ void print_user_list(){
     pthread_mutex_unlock(&glob_var_mutex);
 }
 
-void handle_add_client(Chat__ClientPetition* cli_petition){
+void handle_add_client(Chat__ClientPetition* cli_petition, int sock_fd){
     Chat__UserRegistration *registration = cli_petition->registration;
     char* username = registration->username;
     char* ip = registration->ip;
     char state[20] = "activo";
 
-    add_client(username, ip, state);
+    add_client(username, ip, state, sock_fd);
 }
 
 void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
@@ -125,12 +174,14 @@ void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
             pthread_mutex_lock(&stdout_mutex);
             printf("Error assigning memory \n");
             pthread_mutex_unlock(&stdout_mutex);
+            return;
         }
 
-        if( send(client_fd, buffer, len, 0)){
+        if(send(client_fd, buffer, len, 0) < 0){
             pthread_mutex_lock(&stdout_mutex);
-            printf("Error sending message to server\n");
+            printf("Error sending message to client\n");
             pthread_mutex_unlock(&stdout_mutex);
+            return;
         }
 
         pthread_mutex_lock(&stdout_mutex);
@@ -148,13 +199,18 @@ void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
 
     switch(option){
         case 1:{
-            handle_add_client(cli_petition);
+            handle_add_client(cli_petition, sockfd);
             //print_user_list();
             break;
         }
         case 2:{
             print_user_list();
             handle_user_list(cli_petition, sockfd);
+            break;
+        }
+        case 4:{
+            // Enviar mensaje
+            handle_send_message(cli_petition, sockfd);
         }
 
     }
