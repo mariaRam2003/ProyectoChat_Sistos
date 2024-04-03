@@ -217,7 +217,7 @@ void* listener(void* sock_fd){
     // entramos a un while para escuchar los requests y respuestas que nos puedan llegar
     while(1){
         // Recibir el mensaje de broadcasting del servidor
-        uint8_t buffer[MAX_BUFF_SIZE];
+        void* buffer = malloc(MAX_BUFF_SIZE);
         ssize_t bytes_received = recv(sockfd, buffer, MAX_BUFF_SIZE, 0);
         if (bytes_received <= 0) {
             perror("Error al recibir mensaje de broadcasting del servidor");
