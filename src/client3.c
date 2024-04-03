@@ -224,6 +224,10 @@ void* listener(void* sock_fd){
             exit(EXIT_FAILURE);
         }
 
+        pthread_mutex_lock(&stdout_mutex);
+        printf("longitud en bytes de la respuesta recibida: %d\n",(int) bytes_received);
+        pthread_mutex_unlock(&stdout_mutex);
+
         // Deserializar el mensaje de broadcasting
         Chat__ServerResponse *response = chat__server_response__unpack(NULL, bytes_received, buffer);
         if (response == NULL) {
