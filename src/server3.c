@@ -75,14 +75,86 @@ void handle_add_client(Chat__ClientPetition* cli_petition){
     add_client(username, ip, state);
 }
 
+void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
+    Chat__UserRequest *user_req = cli_petition->users;
+    char* user = user_req->user;
+    char everyone[15] = "everyone";
 
-void option_manager(int option, int sockdf, Chat__ClientPetition* cli_petition){
+    // imprimimos lista de usuarios
+    print_user_list();
+
+    if (strcmp(user, everyone) == 0){
+        Chat__UserInfo* user_info_array[MAX_CLIENTS];
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (client_user_list[i] != NULL) {
+                // Allocate memory for a new Chat__UserInfo struct
+                Chat__UserInfo* user_info = malloc(sizeof(Chat__UserInfo));
+                if (user_info == NULL) {
+                    // Handle allocation failure
+                    fprintf(stderr, "Error: Unable to allocate memory for Chat__UserInfo\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                // Initialize the Chat__UserInfo struct
+                chat__user_info__init(user_info);
+
+                // Assign values to the fields
+                user_info->username = client_user_list[i];
+                user_info->ip = client_ips[i];
+                user_info->status = client_status[i];
+
+                // Store the pointer in user_info_array
+                user_info_array[i] = user_info;
+            }
+        }
+
+        Chat__ConnectedUsersResponse user_response = CHAT__CONNECTED_USERS_RESPONSE__INIT;
+        user_response.connectedusers = user_info_array;
+
+        Chat__ServerResponse server_response = CHAT__SERVER_RESPONSE__INIT;
+        server_response.option = 2;
+        server_response.code = 200;
+        server_response.servermessage = "ayuda porfavor Aaaa";
+
+        server_response.connectedusers = &user_response;
+
+        size_t len = chat__server_response__get_packed_size(&server_response);
+        void* buffer = malloc(len);
+        if (buffer == NULL){
+            pthread_mutex_lock(&stdout_mutex);
+            printf("Error assigning memory \n");
+            pthread_mutex_unlock(&stdout_mutex);
+        }
+
+        if( send(client_fd, buffer, len, 0)){
+            pthread_mutex_lock(&stdout_mutex);
+            printf("Error sending message to server\n");
+            pthread_mutex_unlock(&stdout_mutex);
+        }
+
+        pthread_mutex_lock(&stdout_mutex);
+        printf("Response sent back to client\n");
+        pthread_mutex_unlock(&stdout_mutex);
+
+    }
+
+
+
+}
+
+
+void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
 
     switch(option){
         case 1:{
             handle_add_client(cli_petition);
-            print_user_list();
+            //print_user_list();
             break;
+        }
+        case 2:{
+            print_user_list();
+            handle_user_list(cli_petition, sockfd);
         }
 
     }
