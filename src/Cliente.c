@@ -323,7 +323,7 @@ int main(int argc, char *argv[]) {
         sscanf(input, "%d", &option);
 
         switch (option) {
-            case 1:
+            case 1: {
                 printf("username: %s\n", client.username);
                 printf("Chatear con todos los usuarios (broadcasting)\n");
                 // Solicitar al usuario que ingrese el mensaje a enviar
@@ -336,8 +336,8 @@ int main(int argc, char *argv[]) {
                 // Recibir el mensaje de broadcasting del servidor
                 receive_broadcast_message(sockfd);
                 break;
-
-            case 2:
+            }
+            case 2: {
                 printf("Enviar y recibir mensajes directos\n");
                 // Solicitar al usuario que ingrese el nombre del destinatario y el mensaje a enviar
                 printf("Ingrese el nombre del destinatario: ");
@@ -355,34 +355,41 @@ int main(int argc, char *argv[]) {
                 receive_direct_message(sockfd);
 
                 break;
-
-            case 3:
+            }
+            case 3: {
                 printf("Cambiar de status\n");
                 printf("Seleccione su nuevo estado (ACTIVO, OCUPADO, INACTIVO): ");
                 fgets(input, sizeof(input), stdin);
                 send_status_change_request(sockfd, input, &client);
                 receive_server_response(sockfd, &client);
                 break;
+            }
 
-            case 4:
+            case 4: {
                 printf("Listar usuarios conectados\n");
                 break;
-            case 5:
+            }
+            case 5: {
                 printf("Desplegar información de un usuario\n");
                 break;
-            case 6:
+            }
+            case 6: {
                 printf("Ayuda\n");
                 break;
-            case 7:
+            }
+            case 7: {
                 printf("Salir\n");
                 // Enviar la petición para salir al servidor
                 send_exit_request(sockfd);
                 // Liberar memoria y cerrar socket al finalizar
                 close(sockfd);
                 exit(0);
-            default:
+                break;
+            }
+            default: {
                 printf("Opción no válida. Por favor, seleccione una opción válida.\n");
                 break;
+            }
         }
     }
 

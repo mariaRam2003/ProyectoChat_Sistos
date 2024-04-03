@@ -343,6 +343,18 @@ void *handle_client(void *cli_sock_fd) {
             pthread_mutex_lock(&stdout_mutex);
             printf("Socket was closed incorrectly...\n");
             pthread_mutex_unlock(&stdout_mutex);
+//
+//            pthread_mutex_lock(&glob_var_mutex);
+//            for (int i = 0; i < MAX_CLIENTS; i++){
+//                if (client_fds[i] == client_fd){
+//                    client_fds[i] = 0;
+//                    client_count--;
+//                    client_user_list[i] = NULL;
+//                    client_ips[i] = NULL;
+//                    client_status[i] = NULL;
+//                }
+//            }
+//            pthread_mutex_unlock(&glob_var_mutex);
             break;
         }else{
             pthread_mutex_lock(&stdout_mutex);
