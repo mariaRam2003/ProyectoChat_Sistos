@@ -14,13 +14,12 @@
 #define MESSAGE_LEN 200
 #define USER_LEN 20
 
-// mutex
+// Mutex
 pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t glob_var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
-    char username[50];
+    char username[USER_LEN];
     char status[20];
     char ip[16];
     int port;
@@ -90,6 +89,21 @@ void send_change_status(int sockfd, char* username, char* status){
     free(change_status.status);
 }
 
+void* set_inactive(void* client_info){
+    ClientInfo* client_information = (ClientInfo*)client_info;
+    sleep(50); // Esperar 8 segundos
+
+    // Cambiar el estado a inactivo
+    send_change_status(client_information->sock_fd, client_information->username, "inactivo");
+
+    // Mostrar el mensaje de inactividad
+    pthread_mutex_lock(&stdout_mutex);
+    printf("Status cambiado debido a inactividad\n");
+    pthread_mutex_unlock(&stdout_mutex);
+
+    return NULL;
+}
+
 int display_menu(){
     int option;
     char input[1024];
@@ -113,22 +127,6 @@ int display_menu(){
 void user_registration(char* username, char* ip, int sockfd){
     char status[] = "activo\n";
 
-    // Verificar la longitud del nombre de usuario y la dirección IP
-    if (strlen(username) >= USER_LEN) {
-        fprintf(stderr, "Error: El nombre de usuario debe tener menos de %d caracteres\n", USER_LEN);
-        return;
-    }
-    if (strlen(ip) >= INET_ADDRSTRLEN) {
-        fprintf(stderr, "Error: La dirección IP debe tener menos de %d caracteres\n", INET_ADDRSTRLEN);
-        return;
-    }
-
-    // Verificar la longitud de la cadena de estado
-    if (strlen(status) >= MESSAGE_LEN) {
-        fprintf(stderr, "Error: El estado debe tener menos de %d caracteres\n", MESSAGE_LEN);
-        return;
-    }
-
     Chat__UserRegistration registration = CHAT__USER_REGISTRATION__INIT;
     registration.username = username;
     registration.ip = ip;
@@ -145,7 +143,6 @@ void user_registration(char* username, char* ip, int sockfd){
 
     send_client_petition(sockfd, &petition_register);
 }
-
 
 int main(int argc, char *argv[]) {
     // Verificar argumentos de línea de comandos
@@ -185,23 +182,26 @@ int main(int argc, char *argv[]) {
     printf("Usuario: %s ", client.username);
     printf("conectado al servidor...\n");
 
-    // desde aqui se mandan los rquests del usuario
-    pthread_t thread_speak, thread_listen;
-    pthread_create(&thread_speak, NULL, speaker, (void *) &client);
-    pthread_create(&thread_listen, NULL, listener, (void *) &sockfd);
+    // Desde aquí se mandan los requests del usuario
+    pthread_t thread_speak, thread_listen, thread_inactive;
+    pthread_create(&thread_speak, NULL, speaker, (void *)&client);
+    pthread_create(&thread_listen, NULL, listener, (void *)&sockfd);
+    pthread_create(&thread_inactive, NULL, set_inactive, (void *)&client);
 
     // Para que el file descriptor no se cierre hasta que ambos procesos culminen
     pthread_join(thread_speak, NULL);
     pthread_join(thread_listen, NULL);
+    pthread_join(thread_inactive, NULL);
 
     close(sockfd);
     printf("Conexion cerrada!\n");
+    return 0;
 }
 
 void* listener(void* sock_fd){
     int sockfd = *((int *) sock_fd);
 
-    // entramos a un while para escuchar los requests y respuestas que nos puedan llegar
+    // Entramos a un while para escuchar los requests y respuestas que nos puedan llegar
     while(1){
         // Recibir el mensaje de broadcasting del servidor
         char buffer[MAX_BUFF_SIZE];
@@ -258,7 +258,6 @@ void* listener(void* sock_fd){
 
         // Liberar la memoria de la respuesta del servidor
         chat__server_response__free_unpacked(response, NULL);
-
     }
 }
 
@@ -268,7 +267,7 @@ void* speaker(void* client_info){
     // Lo primero que debe hacer el cliente es registrar su usuario
     user_registration(client_information.username, client_information.ip, client_information.sock_fd);
 
-    // entramos a un while para escuchar las peticiones del usuario
+    // Entramos a un while para escuchar las peticiones del usuario
     while(1){
         int option = display_menu();
 
@@ -318,6 +317,6 @@ void* speaker(void* client_info){
                 break;
             }
         }
-
     }
+    return NULL;
 }
