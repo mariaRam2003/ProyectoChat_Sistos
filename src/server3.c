@@ -46,7 +46,7 @@ int get_sock_fd(char* user){
     return -1;
 }
 
-void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
+void send_one_msg(Chat__ClientPetition* cli_petition, int my_sockfd){
     Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
     char* msg = msgComm->message;
     char* rec = msgComm->recipient;
@@ -68,6 +68,8 @@ void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
     size_t len = chat__server_response__get_packed_size(&srvr_response);
     void* buffer = malloc(len);
 
+    chat__server_response__pack(&srvr_response, buffer);
+
     if (send(rec_sockfd, buffer, len, 0) < 0){
         pthread_mutex_lock(&stdout_mutex);
         printf("error al mendarle el mensaje al cliente\n");
@@ -79,6 +81,56 @@ void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
     pthread_mutex_unlock(&stdout_mutex);
 
     free(buffer);
+
+}
+void broadcast(Chat__ClientPetition* cli_petition, int my_sockfd){
+    Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
+    char* msg = msgComm->message;
+    char* rec = msgComm->recipient;
+    char* sender = msgComm->sender;
+
+    Chat__MessageCommunication comm = CHAT__MESSAGE_COMMUNICATION__INIT;
+    comm.message = msg;
+    comm.sender = sender;
+    comm.recipient = rec;
+
+    Chat__ServerResponse srvr_response = CHAT__SERVER_RESPONSE__INIT;
+    srvr_response.option = 4;
+    srvr_response.code = 200;
+    srvr_response.servermessage = "Se meando el mensaje yupi \n";
+    srvr_response.messagecommunication = &comm;
+
+    size_t len = chat__server_response__get_packed_size(&srvr_response);
+    void* buffer = malloc(len);
+
+    chat__server_response__pack(&srvr_response, buffer);
+
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if(sock_fds[i] != 0){
+            if (send(sock_fds[i], buffer, len, 0) < 0){
+                pthread_mutex_lock(&stdout_mutex);
+                printf("error al mendarle el mensaje al cliente con socket %d\n", sock_fds[i]);
+                pthread_mutex_unlock(&stdout_mutex);
+            }else{
+                pthread_mutex_lock(&stdout_mutex);
+                printf("enviado cone exito a %d\n", sock_fds[i]);
+                pthread_mutex_unlock(&stdout_mutex);
+            }
+        }
+    }
+}
+
+void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
+    Chat__MessageCommunication *msgComm = cli_petition->messagecommunication;
+    char* rec = msgComm->recipient;
+    char everyone[20] = "everyone";
+
+    if (strcmp(everyone, rec) == 0){
+        send_one_msg(cli_petition, my_sockfd);
+    }else{
+        broadcast(cli_petition, my_sockfd);
+    }
+
 }
 
 void add_client(char* user, char* ip, char* status, int sock_fd){
@@ -176,6 +228,8 @@ void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
             pthread_mutex_unlock(&stdout_mutex);
             return;
         }
+
+        chat__server_response__pack(&server_response, buffer);
 
         if(send(client_fd, buffer, len, 0) < 0){
             pthread_mutex_lock(&stdout_mutex);
