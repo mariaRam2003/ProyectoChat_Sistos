@@ -117,7 +117,6 @@ void send_one_msg(Chat__ClientPetition* cli_petition, int my_sockfd){
     pthread_mutex_unlock(&stdout_mutex);
 
     free(buffer);
-    return;
 }
 
 void broadcast(Chat__ClientPetition* cli_petition, int my_sockfd){
@@ -204,7 +203,6 @@ void handle_send_message(Chat__ClientPetition* cli_petition, int my_sockfd){
         printf("comparison 1\n");
         pthread_mutex_unlock(&stdout_mutex);
         send_one_msg(cli_petition, my_sockfd);
-        return;
     }
 
 }
@@ -369,27 +367,26 @@ void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
         case 1:{
             // registrar el usuario
             handle_add_client(cli_petition, sockfd);
-            //break;
+            break;
         }
         case 2:{
             // lista de usuarios
             print_user_list();
             handle_user_list(cli_petition, sockfd);
-            //break;
+            break;
         }
         case 3:{
             // cambio de estado
             handle_state_change(cli_petition, sockfd);
-            //break;
+            break;
         }
         case 4:{
             // Enviar mensaje
             handle_send_message(cli_petition, sockfd);
-            //break;
+            break;
         }
         case 5: {
             handle_single_user_info(cli_petition, sockfd);
-            //break;
         }
 
     }
