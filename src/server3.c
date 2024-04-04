@@ -56,6 +56,11 @@ void handle_state_change(Chat__ClientPetition* cli_petition, int my_sockfd){
 }
 
 int get_sock_fd(char* user){
+    size_t len = strlen(user);
+    if (len > 0 && user[len - 1] == '\n') {
+        user[len - 1] = '\0'; // Replace '\n' with '\0'
+    }
+
     for(int j = 0; j < MAX_CLIENTS; j++){
         if (client_user_list[j] != NULL) {
             if (strcmp(user, client_user_list[j]) == 0) {
