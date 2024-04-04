@@ -41,22 +41,30 @@ void handle_state_change(Chat__ClientPetition* cli_petition, int my_sockfd){
 
     pthread_mutex_lock(&glob_var_mutex);
     for (int i = 0; i < MAX_CLIENTS; i++){
-        if (strcmp(client_user_list[i], user) == 0){
-            client_user_list[i] = status;
+        if (client_user_list[i] != NULL){
+            if (strcmp(client_user_list[i], user) == 0){
+                client_user_list[i] = status;
 
-            pthread_mutex_lock(&stdout_mutex);
-            printf("status de %s cambiado con exito a %s \n", user, status);
-            pthread_mutex_unlock(&stdout_mutex);
+                pthread_mutex_lock(&stdout_mutex);
+                printf("status de %s cambiado con exito a %s \n", user, status);
+                pthread_mutex_unlock(&stdout_mutex);
+                break;
+            }
         }
     }
     pthread_mutex_unlock(&glob_var_mutex);
 }
 
 int get_sock_fd(char* user){
-    for(int i = 0; i < MAX_CLIENTS; i++){
-        if (strcmp(user, client_user_list[i]) == 0){
-            int sock_fd = sock_fds[i];
-            return sock_fd;
+    for(int j = 0; j < MAX_CLIENTS; j++){
+        if (client_user_list[j] != NULL) {
+            if (strcmp(user, client_user_list[j]) == 0) {
+                pthread_mutex_lock(&stdout_mutex);
+                printf("valor de j: %d \n", j);
+                pthread_mutex_unlock(&stdout_mutex);
+                int sock_fd = sock_fds[j];
+                return sock_fd;
+            }
         }
     }
 
@@ -70,6 +78,12 @@ void send_one_msg(Chat__ClientPetition* cli_petition, int my_sockfd){
     char* sender = msgComm->sender;
 
     int rec_sockfd = get_sock_fd(rec);
+    if (rec_sockfd < 0){
+        pthread_mutex_lock(&stdout_mutex);
+        printf("No se encontro el usuario \n");
+        pthread_mutex_unlock(&stdout_mutex);
+        return;
+    }
 
     Chat__MessageCommunication comm = CHAT__MESSAGE_COMMUNICATION__INIT;
     comm.message = strdup(msg);
@@ -300,7 +314,47 @@ void handle_user_list(Chat__ClientPetition* cli_petition, int client_fd){
     }
 }
 
+void handle_single_user_info(Chat__ClientPetition* cli_petition, int sockfd){
+    Chat__UserRequest *req = cli_petition->users;
+    char* user = strdup(req->user);
 
+    char* status;
+    char* ip;
+
+    for (int i = 0; i < MAX_CLIENTS; i++){
+        if (strcmp(user, client_user_list[i]) == 0){
+            status = strdup(client_status[i]);
+            ip = strdup(client_ips[i]);
+            break;
+        }
+    }
+
+    if (status == NULL){
+        perror("No se encontro el usuario\n");
+    }
+
+    Chat__UserInfo user_info = CHAT__USER_INFO__INIT;
+    user_info.status = status;
+    user_info.username = user;
+    user_info.ip = ip;
+
+    Chat__ServerResponse response = CHAT__SERVER_RESPONSE__INIT;
+    response.option = 5;
+    response.code = 5;
+    response.servermessage = "Information from user\n";
+    response.userinforesponse = &user_info;
+
+    size_t len = chat__server_response__get_packed_size(&response);
+    void* buff = malloc(len);
+
+    chat__server_response__pack(&response, buff);
+
+    if (send(sockfd, buff, len, 0) < 0){
+        perror("Error al mandar la informacion del usuario\n");
+    }
+
+    free(buff);
+}
 
 void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
 
@@ -319,10 +373,15 @@ void option_manager(int option, int sockfd, Chat__ClientPetition* cli_petition){
         case 3:{
             // cambio de estado
             handle_state_change(cli_petition, sockfd);
+            break;
         }
         case 4:{
             // Enviar mensaje
             handle_send_message(cli_petition, sockfd);
+            break;
+        }
+        case 5: {
+            handle_single_user_info(cli_petition, sockfd);
         }
 
     }
